@@ -12,6 +12,11 @@ None of the Information and support center links work, the search bar and contai
 explicitly for q and a pages, though I think thats not necessary.
 Also, several links were already dead before scraping, so those are removed
 
+No more Selenium-> the js loading wasn't actually in the way of what we needed to get, so ignoring it entirely
+and just directly putting the xpath or css for the html items we needed worked better, but slower.
+No API: I got an api key, but I guess it was access to their bank records and stuff like that, couldn't get it to accept my key
+and scrape the articles. Might be possible and I just didn't do it right, but I tried for ages and got nowhere.
+
 Supabase Schema:
 Pk -> url: text
 title:text

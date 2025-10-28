@@ -41,7 +41,7 @@ def scrape_page(page_num):
     print(f"[FETCH] {url}")
     resp = requests.get(url, timeout=15)
     if resp.status_code != 200:
-        print(f"[STOP] Page {page_num} returned {resp.status_code}")
+        print(f"Stop, Page {page_num} returned {resp.status_code}")
         return [], True
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -50,7 +50,7 @@ def scrape_page(page_num):
     #direct access hyperlink content
     articles = soup.select("#block-fdic-theme-content div p a")
     if not articles:
-        print(f"[STOP] No articles found on page {page_num}.")
+        print(f"Stop, No articles found on page {page_num}.")
         return [], True
     #stopper for old articles
     cutoff_year = datetime.now().year - MAX_AGE_YEARS
@@ -93,7 +93,7 @@ def scrape_page(page_num):
                     stop_scraping = True
                     continue
 
-        print(f"  → {title[:70]}... ({full_date_str})")
+        print(f" ->{title[:70]}... ({full_date_str})")
 
         #Extract from either pdf or html
         text_content = ""
@@ -120,7 +120,7 @@ def scrape_page(page_num):
 def main():
     page = 1
     all_articles = []
-    print("[START] Scraping FDIC site...")
+    print("start, Scraping FDIC site...")
 
     while True:
         page_results, stop = scrape_page(page)
@@ -128,14 +128,14 @@ def main():
             break
         all_articles.extend(page_results)
         if stop:
-            print(f"[STOP] Reached articles older than {MAX_AGE_YEARS} years.")
+            print(f"stop, Reached articles older than {MAX_AGE_YEARS} years.")
             break
         page += 1
         time.sleep(2)
 
     df = pd.DataFrame(all_articles)
     df.to_csv("final.csv", index=False)
-    print(f"[DONE] Saved {len(all_articles)} articles to fdic_articles.csv")
+    print(f"Done! Saved {len(all_articles)} articles to fdic_articles.csv")
 
 if __name__ == "__main__":
     main()

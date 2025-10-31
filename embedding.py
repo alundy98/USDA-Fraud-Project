@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import hdbscan
 import nltk
@@ -25,24 +26,17 @@ LEMMATIZER = WordNetLemmatizer()
 OUT_DIR = Path("outputs")
 OUT_DIR.mkdir(exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# 2. Load data
-# -----------------------------------------------------------------------------
 SUPABASE_URL = "https://zciswiifptrhorepsoxb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjaXN3aWlmcHRyaG9yZXBzb3hiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NTc1NzUsImV4cCI6MjA3NzIzMzU3NX0.kHl_3ucU8dIuctuvevmSTd0BcT1GwURJmHpzt0hYDBc"
 TABLE_NAME = "fdic_articles"
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise EnvironmentError(
-        "Please set SUPABASE_URL and SUPABASE_KEY environment variables before running this notebook."
-    )
 
-# Create Supabase client
+# Getting articles from Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 res = supabase.table(TABLE_NAME).select("*").execute()
 df = pd.DataFrame(res.data)
 print(f"Loaded {len(df)} rows from Supabase table '{TABLE_NAME}'")
 
-
+# Cleaning text before embedding
 def clean_text(text: str) -> str:
     if not isinstance(text, str):
         return ""
@@ -58,36 +52,43 @@ def clean_text(text: str) -> str:
 print("Cleaning text...")
 df["clean_text"] = df["text"].progress_apply(clean_text)
 
-# 4. Embed text
-
+# Embedding articles
 print("Embedding articles...")
 model = SentenceTransformer("all-MiniLM-L6-v2")
 embeddings = model.encode(df["clean_text"].tolist(), show_progress_bar=True, normalize_embeddings=True)
 
-# 6. Cluster with HDBSCAN
+# Automaticly finding the best number of clusters using HDBSCAN
+min_cluster_size = 8
+min_samples = 5
 
-min_cluster_size = 5       
-min_samples = 3               # smaller → less strict clustering
-epsilon = 0.1                 # 0 = strict, 0.05–0.2 = allows finer splits
-
-print(f"\nClustering with HDBSCAN (min_cluster_size={min_cluster_size}, "
-      f"min_samples={min_samples}, epsilon={epsilon})...")
+print(f"\nClustering with HDBSCAN (min_cluster_size={min_cluster_size}, min_samples={min_samples})...")
 
 cluster_model = hdbscan.HDBSCAN(
     min_cluster_size=min_cluster_size,
     min_samples=min_samples,
-    metric="euclidean",
-    cluster_selection_epsilon=epsilon
+    metric="euclidean"
 )
-
 df["cluster"] = cluster_model.fit_predict(embeddings)
 
-# Check results
+# Looking at HDBSCAN results to see how many clusters were made
+# If less than 4 clusters were made, fallback to KMeans to manually make 5 clusters to ensure results are useful
+# More clusters were tested, any clusters beyond 4 were mostly noise or too small to be significant or useful
 valid_clusters = [c for c in df["cluster"].unique() if c != -1]
-print(f"Formed {len(valid_clusters)} clusters (excluding outliers)")
+num_clusters = len(valid_clusters)
 
-# 7. Keyword extraction per cluster
+print(f"\nFormed {num_clusters} clusters (excluding outliers)")
+print(df["cluster"].value_counts())
 
+if num_clusters < 4:
+    print("\nHDBSCAN formed fewer than 4 clusters. Switching to KMeans with 4 clusters...")
+    kmeans = KMeans(n_clusters=4, random_state=42)
+    df["cluster"] = kmeans.fit_predict(embeddings)
+    valid_clusters = sorted(df["cluster"].unique())
+    num_clusters = len(valid_clusters)
+    print(f"KMeans formed {num_clusters} clusters.")
+    print(df["cluster"].value_counts())
+
+# Getting keywords from each cluster
 def extract_keywords(texts, top_n=10):
     if len(texts) == 0:
         return []
@@ -104,9 +105,7 @@ for label in valid_clusters:
     cluster_keywords[label] = kws
     print(f"Cluster {label} keywords:", ", ".join(kws))
 
-# -----------------------------------------------------------------------------
-# 8. Representative articles (top 3 per cluster)
-# -----------------------------------------------------------------------------
+# Getting the top 3 articles for each clustere based on similarity score
 def get_top_articles_with_scores(label, top_n=3):
     cluster_indices = df.index[df["cluster"] == label]
     if len(cluster_indices) == 0:
@@ -128,7 +127,7 @@ cluster_summaries = []
 for label in valid_clusters:
     cluster_docs = df[df["cluster"] == label]
     if len(cluster_docs) <= 1:
-        continue  # skip singleton clusters
+        continue
 
     reps = get_top_articles_with_scores(label)
     row = {
@@ -142,10 +141,8 @@ for label in valid_clusters:
         row[f"score_{i}"] = round(sim, 3)
     cluster_summaries.append(row)
 
-# -----------------------------------------------------------------------------
-# 9. Save summary
-# -----------------------------------------------------------------------------
+# Saving summary csv
 summary_df = pd.DataFrame(cluster_summaries)
 summary_path = OUT_DIR / "embedding_cluster_summary.csv"
 summary_df.to_csv(summary_path, index=False)
-print(f"\n✅ Saved cluster summary with top articles → {summary_path}")
+print(f"\nSaved cluster summary with top articles: {summary_path}")

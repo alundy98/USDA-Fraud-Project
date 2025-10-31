@@ -92,7 +92,12 @@ if num_clusters < 4:
 def extract_keywords(texts, top_n=10):
     if len(texts) == 0:
         return []
-    vec = TfidfVectorizer(stop_words="english", max_features=2000)
+    vec = TfidfVectorizer(
+        stop_words="english",
+        max_features=5000,
+        ngram_range=(1, 3),
+        min_df=2
+    )
     X = vec.fit_transform(texts)
     tfidf_mean = np.asarray(X.mean(axis=0)).ravel()
     top_indices = tfidf_mean.argsort()[::-1][:top_n]
@@ -105,7 +110,7 @@ for label in valid_clusters:
     cluster_keywords[label] = kws
     print(f"Cluster {label} keywords:", ", ".join(kws))
 
-# Getting the top 3 articles for each clustere based on similarity score
+# Getting the top 3 articles for each cluster based on similarity score
 def get_top_articles_with_scores(label, top_n=3):
     cluster_indices = df.index[df["cluster"] == label]
     if len(cluster_indices) == 0:

@@ -19,9 +19,13 @@ dependencies = [
     "plotly>=6.3.1",
     "requests>=2.32.5",
     "selenium>=4.38.0",
+<<<<<<< HEAD
     "sentence-transformers>=5.1.2",
     "spacy>=3.8.7",
     "supabase>=2.22.3",
     "tqdm>=4.67.1",
     "umap>=0.1.1",
+=======
+    "supabase>=2.22.2",
+>>>>>>> 9dc129e2ff232a83cf23fbbc09fc57ce041bca94
 ]

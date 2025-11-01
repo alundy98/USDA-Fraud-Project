@@ -151,3 +151,30 @@ summary_df = pd.DataFrame(cluster_summaries)
 summary_path = OUT_DIR / "embedding_cluster_summary.csv"
 summary_df.to_csv(summary_path, index=False)
 print(f"\nSaved cluster summary with top articles: {summary_path}")
+# Saving full article CSV with cluster info and relevance scores
+print("\nComputing per-article relevance scores...")
+
+relevance_scores = []
+for label in valid_clusters:
+    cluster_indices = df.index[df["cluster"] == label]
+    cluster_embs = embeddings[cluster_indices]
+    centroid = cluster_embs.mean(axis=0)
+    sims = cosine_similarity([centroid], cluster_embs)[0]
+    for idx, sim in zip(cluster_indices, sims):
+        relevance_scores.append((idx, sim))
+
+# Map relevance scores
+relevance_map = {idx: sim for idx, sim in relevance_scores}
+df["relevance_score"] = df.index.map(relevance_map).fillna(np.nan)
+
+# Replace -1 clusters with None and add keywords for clarity
+df["cluster"] = df["cluster"].apply(lambda x: None if x == -1 else x)
+df["cluster_keywords"] = df["cluster"].map(
+    lambda x: ", ".join(cluster_keywords.get(x, [])) if x is not None else ""
+)
+
+# Save full article embedding summary
+full_article_df = df[["url", "cluster", "relevance_score"]]
+full_article_path = OUT_DIR / "full_article_embedding.csv"
+full_article_df.to_csv(full_article_path, index=False)
+print(f"Saved full article embedding file: {full_article_path}")

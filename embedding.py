@@ -3,7 +3,7 @@ import string
 from pathlib import Path
 from datetime import datetime
 from supabase import create_client, Client
-
+import os
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
@@ -16,7 +16,6 @@ import hdbscan
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-
 tqdm.pandas()
 nltk.download("stopwords")
 nltk.download("wordnet")
@@ -56,6 +55,7 @@ df["clean_text"] = df["text"].progress_apply(clean_text)
 print("Embedding articles...")
 model = SentenceTransformer("all-MiniLM-L6-v2")
 embeddings = model.encode(df["clean_text"].tolist(), show_progress_bar=True, normalize_embeddings=True)
+df["embedding"] = [emb.tolist() for emb in embeddings]
 
 # Automaticly finding the best number of clusters using HDBSCAN
 min_cluster_size = 8

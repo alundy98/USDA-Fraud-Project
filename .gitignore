@@ -2,3 +2,5 @@
 *.env
 .venv
 *.venv
+openAI_test.py
+top_anomalies.csv

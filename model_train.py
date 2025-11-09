@@ -1,78 +1,147 @@
-import pandas as pd
+import ast
+import os
 import numpy as np
+import pandas as pd
+import json
+from supabase import create_client, Client
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.preprocessing import LabelEncoder
 import joblib
-import ast
-#this class trains our XGBoost model for: Fraud Detection and Classification, i.e. is fraud present, and if so what kind
-class FraudClassifier:
-    def __init__(self, model_path=None):
-        #initializign model
-        self.model = None
-        self.model_path = model_path
+from dotenv import load_dotenv
+# Load environment variables
+load_dotenv()
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 
-    def load_data(self, file_path):
-        #the embeddings are in a parquet(better for the size of embeddings + ML)
-        print(f"Loading data from {file_path} ...")
-        if file_path.endswith(".parquet"):
-            df = pd.read_parquet(file_path)
-        else:
-            df = pd.read_csv(file_path)
 
-        # expect columns: 'embedding'-vector and 'fraud_label' (0/1)
-        if isinstance(df.loc[0, "embedding"], str):
-            df["embedding"] = df["embedding"].apply(ast.literal_eval)
+# Helper func to parse embedding safely
+def parse_embedding(x):
+    if x is None:
+        return None
+    if isinstance(x, list):
+        return x
+    if isinstance(x, str):
+        try:
+            parsed = ast.literal_eval(x)
+            if isinstance(parsed, list):
+                return parsed
+        except:
+            pass
+    return None
 
-        X = np.vstack(df["embedding"].values)
-        y = df["fraud_label"].astype(int).values
+print("Fetching fraud embeddings from Supabase")
+# Get labels, all fraud articles
+labels_data = supabase.table("article_labels").select(
+    "url, llm_labels"
+).execute().data
+labels_df = pd.DataFrame(labels_data)
 
-        print(f"loaded {len(df)} samples with embedding dimension {X.shape[1]}")
-        return X, y
+# Parse llm_labels to get fraud_type
+def parse_llm_labels(llm_str):
+    try:
+        cleaned = llm_str.strip().replace("```json", "").replace("```", "")
+        return pd.json.loads(cleaned)
+    except:
+        return {}
+labels_df["llm_labels_parsed"] = labels_df["llm_labels"].apply(parse_llm_labels)
+labels_df["fraud_type"] = labels_df["llm_labels_parsed"].apply(lambda x: x.get("fraud_type"))
 
-    def train(self, X, y, test_size=0.2, random_state=42):
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=test_size, stratify=y, random_state=random_state
-        )
+# Get full embeddings from article_embedding_full schema
+emb_data = supabase.table("article_embedding_full").select(
+    "url, embedding"
+).execute().data
+emb_df = pd.DataFrame(emb_data)
+emb_df["embedding"] = emb_df["embedding"].apply(parse_embedding)
 
-        self.model = XGBClassifier(
-            n_estimators=300,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            eval_metric="logloss",
-            use_label_encoder=False
-        )
+# Merge embeddings with labels on unique key url
+fraud_df = labels_df.merge(emb_df, on="url", how="inner")
+fraud_df = fraud_df[fraud_df["embedding"].notnull()]
+print(f"Fraud rows with embeddings: {len(fraud_df)}")
 
-        print("Training XGBoost model...")
-        self.model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=True)
+print("Fetching non-fraud embeddings from Supabase...")
+non_fraud_data = supabase.table("non_fraud_article_embedding").select(
+    "url, text, embedding"
+).execute().data
+non_fraud_df = pd.DataFrame(non_fraud_data)
+non_fraud_df = non_fraud_df[non_fraud_df["embedding"].notnull()]
+non_fraud_df["embedding"] = non_fraud_df["embedding"].apply(parse_embedding)
+print(f"Non-fraud rows: {len(non_fraud_df)}")
 
-        y_pred = self.model.predict(X_val)
-        y_proba = self.model.predict_proba(X_val)[:, 1]
+# MODEL A: Fraud Detection, binary "is fraud present"
+print("Training Fraud Detection Model:")
 
-        print("Model evaluation:")
-        print(classification_report(y_val, y_pred, digits=3))
-        print("Confusion Matrix:", confusion_matrix(y_val, y_pred))
-        print("ROC AUC:", roc_auc_score(y_val, y_proba))
+fraud_df["fraud_label"] = 1
+non_fraud_df["fraud_label"] = 0
+binary_df = pd.concat([fraud_df, non_fraud_df], ignore_index=True)
+X_bin = np.array(binary_df["embedding"].tolist())
+y_bin = binary_df["fraud_label"].values
+X_train, X_val, y_train, y_val = train_test_split(
+    X_bin, y_bin, test_size=0.2, random_state=42, stratify=y_bin
+)
+binary_model = XGBClassifier(
+    n_estimators=300,
+    learning_rate=0.05,
+    max_depth=8,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="binary:logistic",
+    eval_metric="logloss"
+)
 
-    def save(self, path=None):
-        """Save trained model to file."""
-        if not self.model:
-            raise ValueError("Model not trained")
-        out_path = path or self.model_path or "outputs_with_ai/fraud_xgb_model.pkl"
-        joblib.dump(self.model, out_path)
-        print(f"Model saved to {out_path}")
-    def load(self, path=None):
-        """Load model from file."""
-        in_path = path or self.model_path
-        if not in_path:
-            raise ValueError("No model path")
-        self.model = joblib.load(in_path)
-        print(f"Model loaded from {in_path}")
-    def predict(self, text_embedding):
-        #predict fraud probability for a single embedding (list or np.array)
-        if self.model is None:
-            raise ValueError("Model not loaded or trained ")
-        emb = np.array(text_embedding).reshape(1, -1)
-        return float(self.model.predict_proba(emb)[0, 1])
+binary_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=True)
+
+os.makedirs("outputs_w_ai", exist_ok=True)
+joblib.dump(binary_model, "outputs_w_ai/fraud_detection_model.pkl")
+print("Fraud detection model trained and saved.")
+
+# MODEL B: Fraud Type Classification, multi classifier, what type of fraud is it
+print("\n=== Training Fraud Type Model ===")
+type_df = fraud_df.copy()
+# Filter only fraud rows
+def parse_llm_labels(llm_str):
+    try:
+        cleaned = llm_str.strip().replace("```json", "").replace("```", "")
+        return json.loads(cleaned)
+    except:
+        return {}
+type_df["llm_labels_parsed"] = type_df["llm_labels"].apply(parse_llm_labels)
+type_df["fraud_type"] = type_df["llm_labels_parsed"].apply(lambda x: x.get("fraud_type"))
+
+# Remove rows where fraud_type is missing, not useful here
+type_df = type_df[type_df["fraud_type"].notnull()]
+
+# remove fraud_types that appear only once, does not work for split train logic
+counts = type_df["fraud_type"].value_counts()
+valid_types = counts[counts > 1].index
+type_df = type_df[type_df["fraud_type"].isin(valid_types)]
+
+print(f"Fraud rows for type classification after filtering rare types: {len(type_df)}")
+
+# Encode fraud_type
+le = LabelEncoder()
+y_type = le.fit_transform(type_df["fraud_type"].astype(str))
+X_type = np.array(type_df["embedding"].tolist())
+X_train, X_val, y_train, y_val = train_test_split(
+    X_type, y_type, test_size=0.2, random_state=42, stratify=y_type
+)
+
+type_model = XGBClassifier(
+    n_estimators=400,
+    learning_rate=0.05,
+    max_depth=10,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="multi:softmax",
+    num_class=len(le.classes_),
+    eval_metric="mlogloss"
+)
+
+type_model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=True)
+
+joblib.dump(type_model, "outputs_w_ai/fraud_type_model.pkl")
+joblib.dump(le, "outputs_w_ai/fraud_type_encoder.pkl")
+
+print(f"Fraud type model trained with {len(le.classes_)} classes: {list(le.classes_)}")
+print("All models trained and saved successfully.")

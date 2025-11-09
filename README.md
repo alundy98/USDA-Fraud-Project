@@ -18,9 +18,14 @@ No API: I got an api key, but I guess it was access to their bank records and st
 and scrape the articles. Might be possible and I just didn't do it right, but I tried for ages and got nowhere.
 
 Supabase Schema:
-Pk -> url: text
-title:text
-year:float8, double precision float
-full_date: text
-text: text
-scraped_at: timestampz
+fdic_articles = the orignal cleaned full text, year, date, and url of our articels
+non_fraud_articles = a collection of articles from fdic in the same time span that are not fraud related
+embedding_cluster_summary = a dataset showing info about the 4 clusters
+full_article_embeddings = holds url, relevance score, and cluster they belong to
+article_embedding_full = the meat, full embeddings values for every article with text, url, and cluster
+
+Embedding style using OpenAI:
+Python pipeline for processing non-fraud articles. Uses Supabase to fetch data. Text cleaning uses re, string, NLTK for stopwords and lemmatization. Embeddings generated with OpenAI GPT-4o-mini, chunked for long texts. Summaries and fraud-type/detection labels also via GPT API. Data handled with pandas and numpy. Clustering done with HDBSCAN, fallback to KMeans if too few clusters. TF-IDF extracts keywords per cluster. Cosine similarity computes article relevance to cluster centroids. Outputs include CSV and Parquet files with embeddings, clusters, keywords, summaries, and relevance scores. Handles large datasets but long texts may fail embedding. Computationally intensive.
+
+Model training in model_train.py:
+Python pipeline for training fraud detection models. Uses Supabase to fetch embeddings and labels. Data handled with pandas and numpy. Embeddings parsed safely with ast and json. Binary fraud detection uses XGBoost with train/test split from scikit-learn. Fraud type classification uses LabelEncoder and multi-class XGBoost, filtering out rare fraud types. Models and encoder saved with joblib. Environment variables loaded with dotenv. Successfully trains and saves both binary and multi-class models. Handles missing or malformed embeddings. Computationally efficient but depends on precomputed embeddings.

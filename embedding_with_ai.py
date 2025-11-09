@@ -26,14 +26,14 @@ nltk.download("wordnet")
 
 STOPWORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
-OUT_DIR = Path("outputs_w_ai")
+OUT_DIR = Path("outputs_not_fraud")
 OUT_DIR.mkdir(exist_ok=True)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TABLE_NAME = "fdic_articles"
+TABLE_NAME = "non_fraud_datset"
 
 # Getting articles from Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -61,7 +61,7 @@ def clean_text(text: str) -> str:
     ]
     return " ".join(tokens)
 
-print("Cleaning text...")
+print("Cleaning text:")
 df["clean_text"] = df["text"].progress_apply(clean_text)
 #____________________________________________________________________________________________________________________________________---
 #This is where the ai logic flow starts, this gets full article embeddings
@@ -91,10 +91,10 @@ def get_ai_embeds(texts, model_name="text-embedding-3-small", chunk_size=7000):
                 )
                 chunk_embs.append(response.data[0].embedding)
             except openai.BadRequestError as e:
-                print(f"⚠️ Skipped one chunk due to size or invalid input: {e}")
+                print(f"Skipped one chunk due to size or invalid input: {e}")
                 continue
             except Exception as e:
-                print(f"⚠️ Unexpected error while embedding chunk: {e}")
+                print(f"Error while embedding chunk: {e}")
                 continue
         if chunk_embs:
             # average chunk embeddings
@@ -144,7 +144,7 @@ def get_fraud_type(summary):
         print("Error:", e)
         return None
 
-print("Extracting fraud labels from article summaries...")
+print("extracting fraud labels from article summaries:")
 df["llm_labels"] = df["clean_text"].progress_apply(get_fraud_type)
 
 label_path = OUT_DIR / "article_labels.csv"
@@ -155,7 +155,7 @@ print(f"Saved labeled articles: {label_path}")
 min_cluster_size = 8
 min_samples = 5
 
-print(f"\nClustering with HDBSCAN (min_cluster_size={min_cluster_size}, min_samples={min_samples})...")
+print(f"Clustering with HDBSCAN (min_cluster_size={min_cluster_size}, min_samples={min_samples})...")
 
 cluster_model = hdbscan.HDBSCAN(
     min_cluster_size=min_cluster_size,
@@ -170,11 +170,11 @@ df["cluster"] = cluster_model.fit_predict(embeddings)
 valid_clusters = [c for c in df["cluster"].unique() if c != -1]
 num_clusters = len(valid_clusters)
 
-print(f"\nFormed {num_clusters} clusters (excluding outliers)")
+print(f"Formed {num_clusters} clusters (excluding outliers)")
 print(df["cluster"].value_counts())
 
 if num_clusters < 4:
-    print("\nHDBSCAN formed fewer than 4 clusters. Switching to KMeans with 4 clusters...")
+    print("HDBSCAN formed less than 4 clusters switching to KMeans 4 clusters:")
     kmeans = KMeans(n_clusters=4, random_state=42)
     df["cluster"] = kmeans.fit_predict(embeddings)
     valid_clusters = sorted(df["cluster"].unique())
@@ -244,9 +244,9 @@ for label in valid_clusters:
 summary_df = pd.DataFrame(cluster_summaries)
 summary_path = OUT_DIR / "embedding_cluster_summary.csv"
 summary_df.to_csv(summary_path, index=False)
-print(f"\nSaved cluster summary with top articles: {summary_path}")
+print(f"Saved cluster summary with top articles: {summary_path}")
 # Saving full article CSV with cluster info and relevance scores
-print("\nComputing per-article relevance scores...")
+print("Computing per-article relevance scores")
 
 relevance_scores = []
 for label in valid_clusters:

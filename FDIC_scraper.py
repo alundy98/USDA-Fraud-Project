@@ -8,7 +8,10 @@ import time
 import re
 #start directly from the full FDIC search URL(can change query params as needed)
 #double check that the css/ xpath selectors match exactly what you need, its the only way to access it
-BASE_URL = "https://www.fdic.gov/fdic-search?query=theft%20OR%20wrongful%20OR%20unauthorized%20OR%20unfair%20OR%20deceptive%20OR%20fraud%20OR%20scam%20OR%20fraudulent%20OR%20abusive%20-inactive&site=&orderby=date&pg={page}"
+#this is the main url for fraud articles
+#BASE_URL = "https://www.fdic.gov/fdic-search?query=theft%20OR%20wrongful%20OR%20unauthorized%20OR%20unfair%20OR%20deceptive%20OR%20fraud%20OR%20scam%20OR%20fraudulent%20OR%20abusive%20-inactive&site=&orderby=date&pg={page}"
+#this is the url to scrape exclusively non-fraud related articles, hashtag out the one you do not want to scrape.
+BASE_URL = "https://www.fdic.gov/fdic-search?query=-fraud+and+-scam+and+-deceptive+and+-fake+and+-deception"
 MAX_AGE_YEARS = 10
 
 def extract_pdf_text(url):
@@ -134,7 +137,7 @@ def main():
         time.sleep(2)
 
     df = pd.DataFrame(all_articles)
-    df.to_csv("final.csv", index=False)
+    df.to_csv("non_fraud_dataset.csv", index=False)
     print(f"Done! Saved {len(all_articles)} articles to fdic_articles.csv")
 
 if __name__ == "__main__":

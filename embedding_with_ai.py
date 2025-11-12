@@ -20,20 +20,21 @@ import openai
 from openai import OpenAI
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import json
 tqdm.pandas()
 nltk.download("stopwords")
 nltk.download("wordnet")
 
 STOPWORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
-OUT_DIR = Path("outputs_not_fraud")
+OUT_DIR = Path("outputs_w_ai")
 OUT_DIR.mkdir(exist_ok=True)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TABLE_NAME = "non_fraud_datset"
+TABLE_NAME = "fdic_articles"
 
 # Getting articles from Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -72,80 +73,123 @@ print("Embedding articles...")
 #new ver. includes splitting into chunks for easier embedding
 #combines chunks together at the end if necessary
 def get_ai_embeds(texts, model_name="text-embedding-3-small", chunk_size=7000):
-
     embeddings = []
     print(f"Embedding {len(texts)} documents using {model_name}...")
     for text in tqdm(texts, desc=f"embedding with OpenAI {model_name} model"):
-        # Defensive text cleaning
         if not isinstance(text, str) or len(text.strip()) == 0:
             embeddings.append(np.zeros(1536))
             continue
-        # split into chunks (4 chars per token roughly)
         chunks = [text[i:i + chunk_size * 4] for i in range(0, len(text), chunk_size * 4)]
         chunk_embs = []
         for chunk in chunks:
             try:
-                response = client.embeddings.create(
-                    model=model_name,
-                    input=chunk
-                )
+                response = client.embeddings.create(model=model_name, input=chunk)
                 chunk_embs.append(response.data[0].embedding)
-            except openai.BadRequestError as e:
-                print(f"Skipped one chunk due to size or invalid input: {e}")
-                continue
             except Exception as e:
-                print(f"Error while embedding chunk: {e}")
+                print(f"Embedding chunk skipped: {e}")
                 continue
-        if chunk_embs:
-            # average chunk embeddings
-            emb = np.mean(chunk_embs, axis=0)
-        else:
-            # fallback vector if chunks failed
-            emb = np.zeros(1536)
+        emb = np.mean(chunk_embs, axis=0) if chunk_embs else np.zeros(1536)
         embeddings.append(emb)
     return embeddings
 
 df["embedding"] = get_ai_embeds(df["clean_text"].tolist())
 embeddings = np.array(df["embedding"].tolist())
+
 #this calls the mdoel to get a summary of each article, necessary to feed the fraud type identifer
 #also something we can call in the future for the dashboard
 #USE THIS FOR SUMMARIES
 def summarize_article(text):
-    prompt = f"Summarize the following article in 3-4 sentences:\n\n{text}"
+    prompt = f"Summarize the following article in 3-4 sentences, in reference to fraud and fraud detection:\n\n{text}"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
     return response.choices[0].message.content.strip()
+
+print("Generating summaries:")
 df["summary"] = df["clean_text"].progress_apply(summarize_article)
 
+# Added to classifiy payment fraud types more specifically
+PAYMENT_KEYWORDS = {
+    "wire fraud": ["wire", "wire transfer", "bank transfer", "telegraphic transfer", "tt", "rtgs"],
+    "credit card fraud": ["credit card", "card skimm", "carding", "chargeback", "card fraud"],
+    "check fraud": ["check", "cheque", "check kiting", "forged check", "counterfeit check"],
+    "payroll diversion": ["payroll", "direct deposit", "payroll diversion"],
+    "ach fraud": ["ach", "automated clearing", "electronic payment", "direct debit", "eft"],
+    "invoice fraud": ["invoice", "vendor invoice", "fake invoice", "business email compromise", "bec", "vendor fraud"],
+    "card not present": ["card not present", "cnp", "online payment", "ecommerce fraud"],
+    "gift card fraud": ["gift card", "giftcard"],
+}
+def detect_payment_subtype_from_text(text):
+    t = text.lower()
+    for subtype, keywords in PAYMENT_KEYWORDS.items():
+        if any(kw in t for kw in keywords):
+            return subtype
+    return None
+
 #this calls the model on the summary to get a fraud_type value and a detection_type value
-def get_fraud_type(summary):
-    prompt = f"""
-        Read the following article summary and extract:
-        1. the type of fraud being discussed (e.g. Mortgage fraud, insurance scam, wire fraud, 
-        ai related fraud, identity theft, accounting fraud etc). Make sure that you use the same label for each type though, as we will need consistency in the reported type.
-        2. The detection or prevention method involved (e.g. AML model, audit, whistleblower, algorithmic detection, routine inspection, unknown etc.)
+def get_fraud_type(summary, max_retries=2):
+    system_msg = {"role": "system", "content": "Return ONLY valid JSON. No commentary."}
+    base_prompt = """
+Read the following article summary and extract:
+1. The specific type of fraud being discussed. If it is payment-related, include the subtype and format as:
+   "payment fraud - <subtype>" (e.g., "payment fraud - wire fraud").
+2. The detection or prevention method (e.g., AML model, audit, whistleblower, algorithmic detection, routine inspection, unknown).
 
-        Respond in JSON format with keys: fraud_type and detection_method.
+Respond in strict JSON format with keys: fraud_type and detection_method.
+Summary: {summary}
+""".strip()
 
-        Summary: {summary}
-        """
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        content = response.choices[0].message.content.strip()
-        return content
-    except Exception as e:
-        print("Error:", e)
-        return None
+    for attempt in range(max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[system_msg, {"role": "user", "content": base_prompt.format(summary=summary)}],
+                temperature=0.0,
+                max_tokens=500,
+            )
+            raw = response.choices[0].message.content.strip()
+        except Exception as e:
+            print("LLM call error:", e)
+            raw = None
+
+        parsed = None
+        if raw:
+            raw_clean = re.sub(r"^```json|```$", "", raw).strip()
+            try:
+                parsed = json.loads(raw_clean)
+            except Exception:
+                m = re.search(r"\{.*\}", raw_clean, flags=re.DOTALL)
+                if m:
+                    try:
+                        parsed = json.loads(m.group(0))
+                    except Exception:
+                        parsed = None
+
+        if isinstance(parsed, dict):
+            fraud_type = parsed.get("fraud_type", "").strip().lower()
+            detection = parsed.get("detection_method", "unknown").strip()
+            if "payment" in fraud_type and "-" not in fraud_type:
+                subtype = detect_payment_subtype_from_text(summary)
+                parsed["fraud_type"] = f"payment fraud - {subtype}" if subtype else "payment fraud"
+            if not detection:
+                parsed["detection_method"] = "unknown"
+            return parsed
+
+        # fallback keyword-based
+        subtype = detect_payment_subtype_from_text(summary)
+        if subtype:
+            return {"fraud_type": f"payment fraud - {subtype}", "detection_method": "unknown (keyword fallback)"}
+
+    return {"fraud_type": "unknown", "detection_method": "unknown"}
 
 print("extracting fraud labels from article summaries:")
-df["llm_labels"] = df["clean_text"].progress_apply(get_fraud_type)
+llm_results = df["summary"].progress_apply(lambda s: get_fraud_type(s if isinstance(s, str) else ""))
+
+df["fraud_type"] = llm_results.apply(lambda x: x.get("fraud_type") if isinstance(x, dict) else None)
+df["detection_method"] = llm_results.apply(lambda x: x.get("detection_method") if isinstance(x, dict) else None)
+df["llm_labels"] = llm_results.apply(json.dumps)
 
 label_path = OUT_DIR / "article_labels.csv"
 df.to_csv(label_path, index=False)

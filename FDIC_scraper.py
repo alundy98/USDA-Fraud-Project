@@ -11,7 +11,7 @@ import re
 #this is the main url for fraud articles
 #BASE_URL = "https://www.fdic.gov/fdic-search?query=theft%20OR%20wrongful%20OR%20unauthorized%20OR%20unfair%20OR%20deceptive%20OR%20fraud%20OR%20scam%20OR%20fraudulent%20OR%20abusive%20-inactive&site=&orderby=date&pg={page}"
 #this is the url to scrape exclusively non-fraud related articles, hashtag out the one you do not want to scrape.
-BASE_URL = "https://www.fdic.gov/fdic-search?query=-fraud+and+-scam+and+-deceptive+and+-fake+and+-deception"
+BASE_URL = "https://www.fdic.gov/fdic-search?query=-fraud%20and%20-scam%20and%20-deceptive%20and%20-fake%20and%20-deception&site=&orderby=date&pg={page}"
 MAX_AGE_YEARS = 10
 
 def extract_pdf_text(url):
@@ -49,6 +49,7 @@ def scrape_page(page_num):
 
     soup = BeautifulSoup(resp.text, "html.parser")
     results = []
+
 
     #direct access hyperlink content
     articles = soup.select("#block-fdic-theme-content div p a")

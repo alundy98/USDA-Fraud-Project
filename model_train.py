@@ -11,6 +11,7 @@ import joblib
 from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
+
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
@@ -41,9 +42,13 @@ labels_df = pd.DataFrame(labels_data)
 # Parse llm_labels to get fraud_type
 def parse_llm_labels(llm_str):
     try:
+        # Remove Markdown code fences if present
         cleaned = llm_str.strip().replace("```json", "").replace("```", "")
-        return pd.json.loads(cleaned)
-    except:
+        # Replace doubled quotes with single quotes for valid JSON
+        cleaned = cleaned.replace('""', '"')
+        return json.loads(cleaned)
+    except Exception as e:
+        print(f"Failed to parse LLM string: {e}")
         return {}
 labels_df["llm_labels_parsed"] = labels_df["llm_labels"].apply(parse_llm_labels)
 labels_df["fraud_type"] = labels_df["llm_labels_parsed"].apply(lambda x: x.get("fraud_type"))
@@ -71,7 +76,7 @@ print(f"Non-fraud rows: {len(non_fraud_df)}")
 
 # MODEL A: Fraud Detection, binary "is fraud present"
 print("Training Fraud Detection Model:")
-
+print("Here is where we will actually utilize the data to train mm")
 fraud_df["fraud_label"] = 1
 non_fraud_df["fraud_label"] = 0
 binary_df = pd.concat([fraud_df, non_fraud_df], ignore_index=True)

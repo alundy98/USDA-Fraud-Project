@@ -9,6 +9,21 @@ outputs_w_ai\full_article_embedding.csv
 outputs_w_ai/fraud_xgb_multi.pkl
 outputs_w_ai/full_article_embedding.csv
 outputs_w_ai/embedding_cluster_summary.csv
+outputs_not_fraud
+outputs_not_fraud/*
+outputs_not_fraud/
+outputs_old_priompt/
 fdic_not_fraud_scraper.py
 supa_upsert.py
+visuals/*
+visuals
+scripts_to_ignore/*
+scripts_to_ignore
+merge_csv.py
+test.py
+scripts_to_ignore/
+test.py
+training_changes.py
+visuals/
+__pycache__/
 #git rm --cached fdic_not_fraud_scraper.py

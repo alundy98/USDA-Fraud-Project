@@ -13,6 +13,7 @@ def main():
 
     st.title("USAA Fraud Detection Dashboard")
 
+
     tab1, tab2, tab3 = st.tabs(["Overview", "Interactive Query", "Placeholder"])
     @st.cache_data    
     def load_all_data():

@@ -33,6 +33,8 @@ def run():
         env_vars["SUPABASE_KEY"] = os.getenv("SUPABASE_KEY")
     if os.getenv("SUPABASE_URL"):
         env_vars["SUPABASE_URL"] = os.getenv("SUPABASE_URL")
+    if os.getenv("OPENAI_API_KEY"):
+        env_vars["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
     
     # Include current environment to ensure PATH and other essential vars are available
     env_vars.update(os.environ)

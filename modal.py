@@ -21,7 +21,8 @@ if not streamlit_script_local_path.exists():
 
 @app.function(
     allow_concurrent_inputs=100,
-    secrets=[modal.Secret.from_name("custom-secret-jason")]
+    # TODO: Create secret in modal with the keys
+    secrets=[modal.Secret.from_name("")]
 )
 @modal.web_server(8000)
 def run():

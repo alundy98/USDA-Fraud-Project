@@ -16,22 +16,20 @@ from bs4 import BeautifulSoup
 from supabase import create_client, Client
 import numpy as np
 import openai
+from openai import OpenAI
 
-# NLP utilities from your embedding script
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# Ensure NLTK resources exist (first-run may download)
+# Ensure NLTK resources exist
 nltk.download("stopwords", quiet=True)
 nltk.download("wordnet", quiet=True)
 
 STOPWORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
 
-# -------------------------
 # CONFIG - edit as needed
-# -------------------------
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -43,19 +41,20 @@ SUPABASE_TABLES = [
 ]
 
 # Where newly scraped+embedded+classified articles will be stored
-SUPABASE_TARGET_TABLE = os.getenv("SUPABASE_TARGET_TABLE", "non_fraud_dataset")
+SUPABASE_TARGET_TABLE = "user_requested_articles"
 
-# OpenAI embedding model and chat model (can be changed via env)
-OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+# OpenAI embedding model and chat model
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Embedding chunking safe defaults (based on your script)
+# Create OpenAI client
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+OPENAI_CHAT_MODEL = "gpt-4o-mini"
+
 EMBED_CHUNK_SIZE = 7000  # characters per chunk (approx)
 FALLBACK_EMB_DIM = 1536  # used when embedding fails (same dim as text-embedding-3-small)
 
-# ---------------------------------------------------------------------
-# Utility functions: Scraping (adapted from FDIC_scraper.py)
-# ---------------------------------------------------------------------
 def extract_pdf_text(url: str) -> str:
     """Extract text from a PDF URL (no OCR)."""
     try:

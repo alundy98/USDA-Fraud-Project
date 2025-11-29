@@ -27,14 +27,14 @@ nltk.download("wordnet")
 
 STOPWORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
-OUT_DIR = Path("outputs_new_prompt")
+OUT_DIR = Path("outputs_w_ai")
 OUT_DIR.mkdir(exist_ok=True)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TABLE_NAME = "non_fraud_dataset"
+TABLE_NAME = "oig_articles"
 
 # Getting articles from Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -333,7 +333,7 @@ df["cluster_keywords"] = df["cluster"].map(
 embedding_out = OUT_DIR / "article_embedding_full.parquet"
 df[["url", "text", "embedding", "cluster", "relevance_score"]].to_parquet(embedding_out, index=False)
 # Save full article embedding summary
-full_article_df = df[["url", "cluster", "relevance_score"]]
-full_article_path = OUT_DIR / "relevance_scores_only.csv"
+full_article_df = df
+full_article_path = OUT_DIR / "oig_article_labels.csv"
 full_article_df.to_csv(full_article_path, index=False)
 print(f"Saved full article embedding file: {full_article_path}")

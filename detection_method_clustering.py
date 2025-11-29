@@ -12,7 +12,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 INPUT_FILE = "outputs_w_ai/article_labels.csv"
 
 # === STEP 1: Load your CSV ===
-# Replace 'fraud_methods.csv' with your actual file name and column name
 df = pd.read_csv(INPUT_FILE)
 
 # Setting aside unkown detection methods so they don't interfere with embeddings

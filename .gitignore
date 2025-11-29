@@ -14,7 +14,6 @@ outputs_not_fraud/*
 outputs_not_fraud/
 outputs_old_priompt/
 fdic_not_fraud_scraper.py
-supa_upsert.py
 visuals/*
 visuals
 scripts_to_ignore/*

@@ -7,12 +7,12 @@
 ## Project Description
 
 In partnership with the USAA Federal Savings Bank, our team from the DTSC 3602 course at UNC Charlotte was asked to develop a Python-based tool capable of:
-   • Scraping fraud-relates articles from the FDIC
-   • Cleaning and structuring unstandardized text 
-   • Embedding articles into vectorspace 
-   • Classifying fraud vs non-fraud content 
-   • Clustering fraud types using semantic similarity 
-   • Uploading standardized data into Supabase for downstream analytics
+* Scraping fraud-relates articles from the FDIC
+* Cleaning and structuring unstandardized text 
+* Embedding articles into vectorspace 
+* Classifying fraud vs non-fraud content 
+* Clustering fraud types using semantic similarity 
+* Uploading standardized data into Supabase for downstream analytics
 
 This project will contribute directly to USAA's State of Fraud quarterly report and internal weekly updates for fraud teams, allowing analysts to track trends, identify emerging fraud behaviors, and streamline fraud focused content discovery across multiple public sources. 
 
@@ -45,31 +45,26 @@ uv sync
 
 ##### **3. Configure Environment Variables**
 This project uses:
-   • Supabase for storing embeddings + article metadata 
-   • OpenAI for embeddings and AI cleanup/summarization 
+* Supabase for storing embeddings + article metadata 
+* OpenAI for embeddings and AI cleanup/summarization 
 
 Create an .env file with:
 
 ```
-SUPABSE_URL= 
-SUPBASE_KEY= 
+SUPABASE_URL= 
+SUPABASE_KEY= 
 OPENAI_API_KEY=
 ```
 This will be necessary for embedding generationa nd uploading the processed data to Supabase. 
 
 ##### **4. Run the Streamlit Dashboard**
 The dashboard allow you to explore:
-   • scraped FDIC articles 
-
-   • semantic clusters 
-
-   • fraud pattern groupings 
-
-   • embeddings 
-
-   • similarity search
-
-   • model outputs 
+* scraped FDIC articles 
+* semantic clusters 
+* fraud pattern groupings 
+* embeddings 
+* similarity search
+* model outputs 
 
 Run it:
 ``` bash 
@@ -105,8 +100,8 @@ uv run streamlit_run.py
 ##### **Data Collection**
 
 We built two scrapers to extract FDIC content:
-   • `FIDC_scraper.py` - scrapes FDIC search results, handling both HTML and PDF documents, and allowing custom queries 
-   • `fdicOIG_scraper.py` - scrapes HTML releases from the FDIC OIG site
+* `FIDC_scraper.py` - scrapes FDIC search results, handling both HTML and PDF documents, and allowing custom queries 
+* `fdicOIG_scraper.py` - scrapes HTML releases from the FDIC OIG site
 Each article will include title, publication date, text, and URL. 
 
 ##### **Text Cleaning and Embedding**
@@ -124,21 +119,52 @@ This allowes our FDIC dataset to be merged with other teams' data sources in a c
 ##### **Dashboard**
 
 The Streamlit dashboard `stramlit_run.py` allows used to interact with the FDIC dataset and review the results of our pipeline.  It includes:
-   • an overview of all scraped FDIC articles 
-
-   • details for each article such as title, date, URL, and full text 
-
-   • visualizations generated from the processed dataset 
-
-   • summaries of embedding outputs 
-
-   • sorting and fultering options 
-
-   • tables showing strcutrued metadata 
-
-   • previews of fraud related content extracted during scraping 
+* an overview of all scraped FDIC articles 
+* details for each article such as title, date, URL, and full text 
+* visualizations generated from the processed dataset 
+* summaries of embedding outputs 
+* sorting and fultering options 
+* tables showing strcutrued metadata 
+* previews of fraud related content extracted during scraping 
 
 The dashboard serves as a quick inspection of the dataset and confirmation that the scraping, cleaning, and embedding steps are runnign correctly before merging with other teams' sources.  
+
+---
+
+## Visualizations 
+
+#### **UMAP Visualization**
+
+The 2019 UMAP plot:
+
+<img src="New%20Visuals/2019_umap_plot.png" alt="2019 UMAP Plot" width="400">
+
+The 2024 UMAP plot:
+
+<img src="New%20Visuals/2024_umap_plot.png" alt="2024 UMAP Plot" width="400">
+
+The 2025 UMAP plot: 
+
+<img src="New%20Visuals/2025_umap_plot.png" alt="2025 UMAP Plot" width="400">
+
+#### **COVID Case Count Visualization**
+
+The COVID-related case count visualization:
+
+<img src="New%20Visuals/covid_case_count.png" alt="COVID Case Count Plot" width="400">
+
+#### **Loan Fraud Detection by Cluster**
+
+The visualization of loan fraud detection by cluster:
+
+<img src="New%20Visuals/loan_fraud_detection_by_cluster.png" alt="Loan Fraud Detection by Cluster" width="400">
+
+#### **Loan Fraud UMAP Clusters**
+
+The UMAP visualization of loan fraud clusters:
+
+<img src="New%20Visuals/loan_fraud_umap_clusters.png" alt="Loan Fraud UMAP Clusters" width="400">
+
 
 ---
 
@@ -163,17 +189,12 @@ Across all fraud categories, the FDIC strongly emphasized consumer educaiton.  P
 
 ## Future Work 
 
-   • Expand FDIC coverage and add more sources 
-
-   • Enhance semantic trend monitoring 
-
-   • Increase fraud-type granularity 
-
-   • Strengthen classification models 
-
-   • Improve dashboard interactivity 
-
-   • Automate the pipeline for continuous monitoring 
+* Expand FDIC coverage and add more sources 
+* Enhance semantic trend monitoring 
+* Increase fraud-type granularity 
+* Strengthen classification models 
+* Improve dashboard interactivity 
+* Automate the pipeline for continuous monitoring 
 
 ---
 

@@ -1,172 +1,355 @@
-#notebook
+import os
+import json
+import ast
 import pandas as pd
 import numpy as np
-import seaborn as sb
 import matplotlib.pyplot as plt
-import matplotlib
-import re
+import seaborn as sb
 import umap.umap_ as umap
-from sklearn.manifold import TSNE
-from sklearn.cluster import KMeans
-import joblib
-from ast import literal_eval
-from model_train import parse_llm_labels, parse_embedding
-
-#for older visuals, you can j use older versions of this .py
-
-#al = article_labels
-df = pd.read_csv("outputs_w_ai/article_labels.csv")
-embeds = pd.read_parquet("outputs_w_ai/article_embedding_full.parquet")
-if isinstance(embeds["embedding"].iloc[0], str):
-    embeds["embedding"] = embeds["embedding"].apply(literal_eval)
-    embeds["embedding"] = embeds["embedding"].apply(np.array)
-
-common_cols = [c for c in df.columns if c in embeds.columns and c != "url"]
-
-# Drop overlapping columns from df before merging
-df = df.drop(columns=common_cols, errors="ignore")#
-#fraud grouping:
-# Define your fraud category keywords
-fraud_groups = {
-    "Insider Abuse": ["insider abuse", "internal fraud"],
-    "Counterfeit Fraud": ["subscription fraud", "credit card fraud", "counterfeiting", "counterfeit check fraud", "counterfeit money orders","unemployment insurance fraud"],
-    "Banking Fraud": ["unfair and deceptive practices", "udap", "non sufficient funds fees", "bank fraud"],
-    "Identity Fraud": ["identity fraud", "identity theft", "imposter scams"],
-    "Elder Abuse": ["senior life settlements", "elder financial abuse"],
-    "Cyber Fraud": ["crypto fraud", "cryptocurrency fraud", "wire", "electronic payment", "unauthorized access"],
-    "Real Estate Fraud": ["owner occupancy fraud", "misrepresentation"],
-    "Mail Fraud": ["pen pal scam", "mail fraud"],
-    "Loan Fraud": ["predatory lending", "indirect auto lending"]
-}
-detection_groups = {
-    "Audit":["audit","rigorous examination proceedures", "analytical methods"],
-    "Algorithmic Systems":["cross-system counterparty screening utility","algorithmic detection","AML model","model","mechanisms","robust fraud detection"],
-    "Policy": ["collaborating among financial institutions", "compliance and oversight", "collaboration between banks and law enforcement"],
-    "Educational": ["educational resources","financial education","examination process"],
-    "Regulator Enforcement": ["regulatory scrutiny","rigourous examination procedures"],
-    "Internal Review":["interal reviews","supervisory guidance"],
-    "Investigation": ["monitoring","monitoring financial accounts", "monitoring billing statements","monitoring and recording", "monitoring account statements" ]
-}
-#helper: normalize text
-def normalize_text(text):
-    text = str(text).lower()
-    return re.sub(r"[^a-z\s]", "", text)
-
-#main grouping logic
-def assign_fraud_group(fraud_type):
-    text = normalize_text(fraud_type)
-    scores = {group: 0 for group in fraud_groups}
-    for group, keywords in fraud_groups.items():
-        for kw in keywords:
-            if kw in text:
-                scores[group] += 1
-    # Get the group with the most keyword matches
-    best_match = max(scores, key=scores.get)
-    if scores[best_match] == 0:
-        return "Other / Unknown"
-    return best_match
-
-def assign_detection_group(detection_method):
-    text = normalize_text(detection_method)
-    scores = {group: 0 for group in detection_groups}
-    for group, keywords in detection_groups.items():
-        for kw in keywords:
-            if kw in text:
-                scores[group] += 1
-    # Get the group with the most keyword matches
-    best_match = max(scores, key=scores.get)
-    if scores[best_match] == 0:
-        return "Other / Unknown"
-    return best_match
-
-# df = pd.read_csv("article_labels.csv")  # for example
-df["fraud_group"] = df["fraud_type"].apply(assign_fraud_group)
-df["detection_group"] = df["detection_method"].apply(assign_detection_group)
-priority_df_cols = ["fraud_type", "detection_method", "llm_labels","fraud_group","detection_group"]
-
-common_cols = [
-    c for c in df.columns 
-    if c in embeds.columns and c not in ["url"] + priority_df_cols
-]
-
-df = df.drop(columns=common_cols, errors="ignore")
-
-# Merge datasets
-al = pd.merge(df, embeds, on="url", how="inner")
-
-#Filter out unknowns
-al = al[al["fraud_type"].fillna("").str.lower() != "unknown"].reset_index(drop=True)
-al = al[al["fraud_group"].fillna("").str.lower() != "other / unknown"].reset_index(drop=True)
-
-#semantic analysis of fraud, what fraud type's narratives stick close together, like if elderly people are targets commonly in identity theft
-#it may be semantically close to cases of elder financial abuse
+from scipy.cluster.hierarchy import linkage, dendrogram
 from sklearn.metrics.pairwise import cosine_similarity
-import umap
-from umap import UMAP
-# Stack embeddings
+from sklearn.metrics.pairwise import cosine_distances
+import joblib
+from urllib.parse import urlparse
 
+# Load local data
+print("Loading article labels...")
+labels_df = pd.read_csv("outputs_new_prompt/combined_articles.csv")
+print("Loading local embeddings parquet...")
+emb_df = pd.read_parquet(r"outputs_new_prompt/combined_embeddings.parquet")
 
+# Helper functions mostly copy and pasted from embeds and old vis code
+def normalize_url(u):
+    if pd.isna(u):
+        return None
+    s = str(u).strip()
+    if s == "":
+        return None
+    p = urlparse(s)
+    netloc = p.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    path = p.path.rstrip("/")
+    norm = netloc + path
+    return norm
 
-# Compute centroids by fraud_type and year
-centroids = {}
+def parse_embedding(x):
+    if x is None:
+        return None
+    if isinstance(x, list):
+        return x
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, str):
+        try:
+            v = ast.literal_eval(x)
+            if isinstance(v, list):
+                return v
+        except Exception:
+            pass
+        try:
+            v = json.loads(x)
+            if isinstance(v, list):
+                return v
+        except Exception:
+            pass
+        s = x.strip()
+        if s.startswith("[") and s.endswith("]"):
+            inner = s[1:-1].strip()
+            parts = inner.split()
+            try:
+                nums = [float(p) for p in parts]
+                return nums
+            except Exception:
+                return None
+    return None
 
-for year, group in al.groupby("published"):
-    centroids[year] = {}
-    for ftype, fgroup in group.groupby("fraud_group"):
-        emb_matrix = np.vstack(fgroup["embedding"].values)
-        centroids[year][ftype] = emb_matrix.mean(axis=0)
+def clean_embedding_array(e):
+    if isinstance(e, np.ndarray):
+        return e if e.size == 1536 else None
+    if isinstance(e, list):
+        return np.array(e, dtype=float) if len(e) == 1536 else None
+    return None
 
-# Measure semantic drift per fraud type
-#(cosine similarity year-to-year)
-drift_records = []
+# Prepare embeddings 
+print("Parsing embeddings from parquet...")
+if "embedding" not in emb_df.columns:
+    raise ValueError("Parquet does not contain an 'embedding' column. Check parquet schema.")
+emb_df["embedding"] = emb_df["embedding"].apply(parse_embedding)
+emb_df["embedding_clean"] = emb_df["embedding"].apply(clean_embedding_array)
+emb_df = emb_df[emb_df["embedding_clean"].notnull()].copy()
+print(f"Embeddings retained after cleaning: {len(emb_df)}")
 
-fraud_types = al["fraud_group"].unique()
+# Normalize URLs and merge
+labels_df["url_norm"] = labels_df["url"].apply(normalize_url)
+emb_df["url_norm"] = emb_df["url"].apply(normalize_url)
 
-for f in fraud_types:
-    # sort years where this fraud type exists
-    years_available = sorted([y for y in centroids if f in centroids[y]])
-    
-    # compute pairwise drift Y_t → Y_(t+1)
-    for i in range(len(years_available) - 1):
-        y1, y2 = years_available[i], years_available[i+1]
-        v1, v2 = centroids[y1][f], centroids[y2][f]
+# Quick diagnostics if something's strange
+labels_only = set(labels_df["url_norm"].dropna().unique()) - set(emb_df["url_norm"].dropna().unique())
+emb_only = set(emb_df["url_norm"].dropna().unique()) - set(labels_df["url_norm"].dropna().unique())
+print(f"Unique url_norm in labels: {len(labels_df['url_norm'].dropna().unique())}, in emb: {len(emb_df['url_norm'].dropna().unique())}")
+if len(labels_only) > 0:
+    print(f"Example URLs present only in labels (up to 5): {list(labels_only)[:5]}")
+if len(emb_only) > 0:
+    print(f"Example URLs present only in embeddings (up to 5): {list(emb_only)[:5]}")
 
-        cos = cosine_similarity([v1], [v2])[0][0]
+merged = labels_df.merge(emb_df, on="url_norm", how="inner", suffixes=("_labels", "_emb"))
+print(f"Merged rows: {len(merged)}")
+if len(merged) == 0:
+    raise RuntimeError("Merge returned 0 rows after URL normalization. Inspect URL normalization differences between CSV and parquet.")
 
-        drift_records.append({
-            "fraud_group": f,
-            "year_start": y1,
-            "year_end": y2,
-            "cosine_similarity": cos,
-            "semantic_change": 1 - cos
-        })
+#use parquet embeddings (embedding_clean) and drop CSV-string embeddings
+if "embedding_clean" in merged.columns and merged["embedding_clean"].notna().sum() > 0:
+    merged["embedding"] = merged["embedding_clean"]
+    print("Using 'embedding_clean' from parquet as 'embedding'.")
+elif "embedding_emb" in merged.columns and merged["embedding_emb"].notna().sum() > 0:
+    merged["embedding"] = merged["embedding_emb"]
+    print("Using 'embedding_emb' from parquet as 'embedding'.")
+elif "embedding" in merged.columns:
+    merged["embedding"] = merged["embedding"]
+    print("Using 'embedding' column available after merge.")
+else:
+    raise KeyError("No embedding column found after merge. Columns: " + ", ".join(merged.columns.tolist()))
+for col in ["embedding_labels", "embedding_x", "embedding_y"]:
+    if col in merged.columns and col != "embedding":
+        merged.drop(columns=[col], inplace=True)
+        print(f"Dropped column {col} to avoid CSV-string embeddings overwriting parquet vectors.")
 
-drift_df = pd.DataFrame(drift_records)
+# Final cleaning check
+merged["embedding_clean"] = merged["embedding"].apply(clean_embedding_array)
+valid_count = merged["embedding_clean"].notna().sum()
+print(f"Valid cleaned embeddings after forcing parquet source: {valid_count}")
+merged = merged[merged["embedding_clean"].notna()].copy()
+print(f"Loaded {len(merged)} valid articles with embeddings.")
 
-# semantic drift over time
-plt.figure(figsize=(12, 7))
+# UMAP Visualization (reverted to original)
+def semantic_umap_map(df, save_path="umap_plot.png"):
+    emb_matrix = np.vstack(df["embedding_clean"].values)
+    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, random_state=42)
+    emb_2d = reducer.fit_transform(emb_matrix)
+    df["x"], df["y"] = emb_2d[:, 0], emb_2d[:, 1]
 
-# Filter for years 2022–2025 only
-filtered = drift_df[(drift_df["year_end"] >= 2022) & (drift_df["year_end"] <= 2025)]
+    plt.figure(figsize=(10, 7))
+    hue_col = "fraud_group_primary" if "fraud_group_primary" in df.columns else None
 
-for f in fraud_types:
-    subset = filtered[filtered["fraud_group"] == f]
-    if len(subset) == 0:
-        continue
+    if hue_col is None:
+        sb.scatterplot(data=df, x="x", y="y", alpha=0.7)
+    else:
+        sb.scatterplot(
+            data=df, x="x", y="y", hue=hue_col, alpha=0.7, palette="tab10"
+        )
 
-    plt.plot(
-        subset["year_end"],
-        subset["cosine_similarity"],
-        marker="o",
-        label=f
+    plt.title("Semantic Map of Fraud Narratives (UMAP)")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    plt.close()
+
+# Semantic Drift Over Time 
+def semantic_drift_over_time(df, save_path="semantic_drift_yr_to_yr.png"):
+    df = df.copy()
+
+    # Use punlished column directly as the year
+    centroids = df.groupby("published")["embedding_clean"].apply(
+        lambda x: np.mean(np.vstack(x.values), axis=0)
     )
 
-plt.title("Semantic drift of fraud types over time 2019–2025")
-plt.xlabel("Year")
-plt.xticks([])
-plt.ylabel("")
-plt.ylim(0, 1)
-plt.grid(True, alpha=0.3)
-plt.legend(title="Fraud Group")
-plt.tight_layout()
-plt.show()
+    years = sorted(centroids.index)
+    print("Years found:", years)
+
+    drift = []
+    xlabels = []
+
+    for i in range(len(years) - 1):
+        y1, y2 = years[i], years[i + 1]
+        c1, c2 = centroids[y1], centroids[y2]
+        dist = cosine_distances([c1], [c2])[0, 0]
+        drift.append(dist)
+        xlabels.append(f"{y1}-{y2}")
+
+    if not drift:
+        print("Warning: No drift data to plot (need at least two years).")
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(xlabels, drift, marker="o")
+    plt.title("Semantic Drift of Fraud Narratives (Year-to-Year)")
+    plt.xlabel("Year Transitions")
+    plt.ylabel("Cosine Distance")
+    plt.grid(True, alpha=0.3)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    plt.close()
+
+    # Save drift data for later use
+    joblib.dump({"years": years, "drift": drift, "labels": xlabels}, "semantic_drift.joblib")
+
+# Fraud Magnitude by Fraud Group by mean
+def fraud_magnitude_by_group(df, save_path="fraud_mean_amount_by_group.png"):
+    df = df.copy()
+
+    # Keep only valid numeric amounts > 0
+
+    # Compute mean amount by fraud_group_primary
+    agg_df = df.groupby("fraud_group_primary").agg(
+        mean_amount=("amount_numeric", "mean"),
+        case_count=("amount_numeric", "count")
+    ).reset_index()
+
+    # Sort by mean_amount for easier visualization
+    agg_df = agg_df.sort_values("mean_amount", ascending=False)
+
+    plt.figure(figsize=(12, 7))
+    sb.barplot(
+        data=agg_df,
+        x="fraud_group_primary",
+        y="mean_amount",
+        palette="tab10"
+    )
+    plt.title("Average Amount Involved by Fraud Group")
+    plt.xlabel("Fraud Group (Primary)")
+    plt.ylabel("Mean Amount Involved")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    plt.close()
+
+# Loan Fraud Secondary Types
+def loan_fraud_secondary_hist(df, save_path="loan_fraud_secondary_counts.png"):
+    df = df.copy()
+    # Filter to only Loan Fraud primary group
+    loan_df = df[df["fraud_group_primary"] == "Loan Fraud"]
+    # Only keep rows with a valid secondary type
+    loan_df = loan_df[loan_df["fraud_group_secondary"].notna() & (loan_df["fraud_group_secondary"] != "")]
+    # Count number of cases per secondary type
+    counts = loan_df["fraud_group_secondary"].value_counts().reset_index()
+    counts.columns = ["fraud_group_secondary", "case_count"]
+    # Sort by count for better readability
+    counts = counts.sort_values("case_count", ascending=False)
+    plt.figure(figsize=(10, 6))
+    sb.barplot(
+        data=counts,
+        x="fraud_group_secondary",
+        y="case_count",
+        palette="tab10"
+    )
+    plt.title("Number of Cases by Loan Fraud Secondary Types")
+    plt.xlabel("Loan Fraud Secondary Type")
+    plt.ylabel("Number of Cases")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    plt.close()
+
+# Fraud Type vs Detection Method Similarity
+def fraud_vs_detection_similarity(df, save_path="fraud_detection_similarity_heatmap.png"):
+    df = df.copy()
+    # Keep only rows with valid fraud_group_primary and detection_method
+    df = df[df["fraud_group_primary"].notna() & df["detection_method"].notna()]
+    fraud_types = df["fraud_group_primary"].unique()
+    detection_methods = df["detection_method"].unique()
+    # Compute centroids for each fraud type × detection method
+    centroids = {}
+    for f in fraud_types:
+        centroids[f] = {}
+        for d in detection_methods:
+            subset = df[(df["fraud_group_primary"] == f) & (df["detection_method"] == d)]
+            if len(subset) > 0:
+                emb_matrix = np.vstack(subset["embedding_clean"].values)
+                centroids[f][d] = np.mean(emb_matrix, axis=0)
+            else:
+                centroids[f][d] = None
+    # Build similarity matrix
+    sim_matrix = pd.DataFrame(index=fraud_types, columns=detection_methods, dtype=float)
+    for f in fraud_types:
+        for d in detection_methods:
+            if centroids[f][d] is not None:
+                # cosine similarity between fraud type centroid and detection method centroid
+                sim = cosine_distances([centroids[f][d]], [centroids[f][d]])  # self distance = 0
+                # convert distance to similarity (1 - distance)
+                sim_matrix.loc[f, d] = 1 - sim[0][0]
+            else:
+                sim_matrix.loc[f, d] = np.nan
+    # Plot heatmap
+    plt.figure(figsize=(12, 8))
+    sb.heatmap(sim_matrix, annot=True, fmt=".2f", cmap="coolwarm", cbar_kws={'label': 'Similarity'})
+    plt.title("Fraud Type vs Detection Method Similarity (Cosine)")
+    plt.xlabel("Detection Method")
+    plt.ylabel("Fraud Type")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.show()
+    plt.close()
+
+# Hierarchical Clustering Dendrogram of Fraud Groups
+def fraud_group_dendrogram(df):
+    # find centroids for each fraud_group_primary
+    centroids = df.groupby("fraud_group_primary")["embedding_clean"].apply(
+        lambda x: np.mean(np.vstack(x.values), axis=0)
+    )
+    
+    # Cosine similarity between centroids
+    sim_matrix = cosine_similarity(np.vstack(centroids.values))
+    # Convert similarity to distance for clustering
+    dist_matrix = 1 - sim_matrix
+    
+    # Hierarchical clustering
+    linked = linkage(dist_matrix, method='average')
+    
+    plt.figure(figsize=(12, 6))
+    dendrogram(
+        linked,
+        labels=centroids.index.tolist(),
+        orientation='top',
+        leaf_rotation=45,
+        leaf_font_size=12,
+        color_threshold=0.5
+    )
+    plt.title("Hierarchical Clustering of Fraud Groups (Semantic Similarity)")
+    plt.ylabel("Distance (1 - Cosine Similarity)")
+    plt.tight_layout()
+    plt.savefig("fraud_group_dendrogram.png", dpi=300)
+    plt.show()
+    plt.close()
+
+# MDS Map of Fraud Group Centroids
+from sklearn.manifold import MDS
+def fraud_group_mds_map(df):
+    # Compute centroids
+    centroids = df.groupby("fraud_group_primary")["embedding_clean"].apply(
+        lambda x: np.mean(np.vstack(x.values), axis=0)
+    )
+    # Cosine distance
+    sim_matrix = cosine_similarity(np.vstack(centroids.values))
+    dist_matrix = 1 - sim_matrix
+    
+    # MDS projection into 2D
+    mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
+    mds_2d = mds.fit_transform(dist_matrix)
+    
+    plt.figure(figsize=(10, 7))
+    for i, label in enumerate(centroids.index):
+        plt.scatter(mds_2d[i, 0], mds_2d[i, 1], s=100)
+        plt.text(mds_2d[i, 0]+0.01, mds_2d[i, 1]+0.01, label, fontsize=10)
+    
+    plt.title("MDS Map of Fraud Group Centroids (Semantic Positions)")
+    plt.xlabel("MDS Dimension 1")
+    plt.ylabel("MDS Dimension 2")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("fraud_group_mds.png", dpi=300)
+    plt.show()
+    plt.close()
+
+
+#the best way to run this is to call funcs directly, otherwise it gets hairy
+if __name__ == "__main__":
+    fraud_group_mds_map(merged)
+    fraud_group_dendrogram(merged)
+    fraud_vs_detection_similarity(merged, save_path="fraud_detection_similarity_heatmap.png")
+    loan_fraud_secondary_hist(merged, save_path="loan_fraud_secondary_counts.png")
+    fraud_magnitude_by_group(merged, save_path="fraud_mean_amount_by_group.png")

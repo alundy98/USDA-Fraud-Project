@@ -27,14 +27,14 @@ nltk.download("wordnet")
 
 STOPWORDS = set(stopwords.words("english"))
 LEMMATIZER = WordNetLemmatizer()
-OUT_DIR = Path("outputs_new_prompt")
+OUT_DIR = Path("outputs_w_ai")
 OUT_DIR.mkdir(exist_ok=True)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TABLE_NAME = "non_fraud_dataset"
+TABLE_NAME = "oig_articles"
 
 # Getting articles from Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -116,10 +116,11 @@ def summarize_article(text):
     Summarize the following article in 4–5 concise sentences for a financial crime dataset.
     Focus on capturing:
     1. Who or what organization was involved.
-    2. The main fraud or misconduct type (describe briefly).
+    2. The main fraud or misconduct type (describe briefly, include all relevant details prioritize that).
     3. Whether it was detected after it occurred or prevented beforehand.
     4. The method or mechanism that led to detection or prevention.
     5. Any key outcomes (fines, arrests, policy changes, etc.).
+    6. the amount of money incolved if mentioned.
 
     Be factual and structured so that another model can extract fraud_type and method clearly.
 
@@ -140,17 +141,26 @@ def get_fraud_type(summary):
     You are analyzing a summary of a fraud-related article.
 
     Your tasks:
-    1. Identify the main **raw fraud type** mentioned. Be descriptive, do not limit it to predefined categories.
-    2. Map the raw fraud type to one of the following **standard categories**:
-       - Corporate Fraud
+    1. Identify the *raw*, descriptive fraud type mentioned in the article.
+    2. Map the fraud to one or two of the following **12 standard fraud groups** 
+       (select a secondary one ONLY if it meaningfully applies to fully describe the fraud):
+
+       - Internal Banking Misconduct Fraud
+       - Account Manipulation Fraud
+       - Loan Fraud
+       - Insider Fraud
+       - Elder Fraud
+       - Payment Fraud
+       - Tax Fraud
        - Investment Fraud
        - Insurance Fraud
        - Healthcare Fraud
        - Cyber Fraud
        - Identity Fraud
        - Money Laundering Fraud
-       - Other Fraud
-    3. Identify the **detection or prevention method** mentioned, if any. Use the following list or "Unknown" if not clear:
+       - Government Benefits Fraud
+
+    3. Extract the **detection or prevention method**, using the following list:
        - Audit
        - Whistleblower
        - Algorithmic Detection
@@ -164,28 +174,34 @@ def get_fraud_type(summary):
        - Preventive Policy
        - Unknown
 
-    Notes:
-    - If multiple fraud types are mentioned, pick the *primary* one.
-    - If you detect no specific case of fraud, pick Other
-    - If it describes how fraud was prevented instead of detected, still include that under detection_method.
-    - Respond **ONLY in JSON** with the following keys:
+    4. Identify the **location** (City/State), or respond "Unknown".
+
+    5. Extract the **amount of money involved**, if mentioned.  
+       - Return numbers as e.g.,"$850,000".  
+       - If not present or fraud not involving finances, return "Unknown".
+
+    Respond **ONLY in JSON** with the following keys:
+
     {{
-        "raw_fraud_type": "<raw descriptive fraud type>",
-        "fraud_type": "<mapped standard category>",
-        "detection_method": "<detection or prevention method>"
+        "fraud_type": "<raw descriptive fraud type>",
+        "fraud_group_primary": "<primary fraud category>",
+        "fraud_group_secondary": "<secondary category or 'None'>",
+        "detection_method": "<method or 'Unknown'>",
+        "location": "<City/State or 'Unknown'>",
+        "amount_involved": "<extracted dollar amount or 'Unknown'>"
     }}
 
     Summary:
     {summary}
     """
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
-        content = response.choices[0].message.content.strip()
-        return content
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print("Error:", e)
         return None
@@ -193,7 +209,7 @@ def get_fraud_type(summary):
 print("extracting fraud labels from article summaries:")
 df["llm_labels"] = df["clean_text"].progress_apply(get_fraud_type)
 
-label_path = OUT_DIR / "article_labels.csv"
+label_path = OUT_DIR / "final_oig_article_labels.csv"
 df.to_csv(label_path, index=False)
 print(f"Saved labeled articles: {label_path}")
 #import tieimporttieimporttieimporttieimporttieimportteie
@@ -306,7 +322,7 @@ for label in valid_clusters:
 
 # Saving summary csve
 summary_df = pd.DataFrame(cluster_summaries)
-summary_path = OUT_DIR / "embedding_cluster_summary.csv"
+summary_path = OUT_DIR / "fdic_oig_embedding_cluster_summary.csv"
 summary_df.to_csv(summary_path, index=False)
 print(f"Saved cluster summary with top articles: {summary_path}")
 # Saving full article CSV with cluster info and relevance scores
@@ -330,10 +346,10 @@ df["cluster"] = df["cluster"].apply(lambda x: None if x == -1 else x)
 df["cluster_keywords"] = df["cluster"].map(
     lambda x: ", ".join(cluster_keywords.get(x, [])) if x is not None else ""
 )
-embedding_out = OUT_DIR / "article_embedding_full.parquet"
+embedding_out = OUT_DIR / "oig_article_embedding_full.parquet"
 df[["url", "text", "embedding", "cluster", "relevance_score"]].to_parquet(embedding_out, index=False)
 # Save full article embedding summary
-full_article_df = df[["url", "cluster", "relevance_score"]]
-full_article_path = OUT_DIR / "relevance_scores_only.csv"
+full_article_df = df
+full_article_path = OUT_DIR / "oig_article_labels.csv"
 full_article_df.to_csv(full_article_path, index=False)
 print(f"Saved full article embedding file: {full_article_path}")

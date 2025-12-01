@@ -8,7 +8,6 @@ from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
-
 import streamlit as st
 import requests
 import pdfplumber
@@ -17,11 +16,13 @@ from supabase import create_client, Client
 import numpy as np
 import openai
 from openai import OpenAI
-
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
+import dotenv
+from dotenv import load_dotenv
+load_dotenv()
 # Ensure NLTK resources exist
 nltk.download("stopwords", quiet=True)
 nltk.download("wordnet", quiet=True)
@@ -173,7 +174,7 @@ You are analyzing a summary of a fraud-related article.
 Your tasks:
 1. Identify the main raw fraud type mentioned. Be descriptive.
 2. Map the raw fraud type to one of the following standard categories:
-   - Corporate Fraud
+   - Loan Fraud
    - Investment Fraud
    - Insurance Fraud
    - Healthcare Fraud
@@ -553,19 +554,43 @@ def main():
     # Tabs: Visualizations, Interactive Search, Run Scraper
     tab1, tab2, tab3 = st.tabs(["Visualizations and Findings", "Interactive Search", "Run Scraper"])
 
-    # --------------------
-    # Tab 1: Visualizations
-    # --------------------
+    # visuals
     with tab1:
         st.header("Visualizations and Findings")
+        # row 1 two side by side
         col1, col2 = st.columns(2)
         with col1:
-            st.image("placeholder.png", caption="Figure 1 - Replace with real visualization", use_column_width=True)
-            st.text_area("Figure 1 Description", "Add explanation for visualization #1 here.")
+            st.image("fraud_group_counts.png", caption="Visualization 1", use_container_width=True)
+            st.text_area("Description for Visualization 1", "Add detailed explanation for Visualization 1 here.", height=150, key="desc_vis1")
         with col2:
-            st.image("placeholder.png", caption="Figure 2 - Replace with real visualization", use_column_width=True)
-            st.text_area("Figure 2 Description", "Add explanation for visualization #2 here.")
+            st.image("loan_fraud_secondary_counts.png", caption="Visualization 2", use_container_width=True)
+            st.text_area("Description for Visualization 2", "Add detailed explanation for Visualization 2 here.", height=150, key="desc_vis2")
         st.markdown("---")
+        # big visualization
+        st.image("visuals/ semantic_drift_of_fraud_narratives_over_years.png", caption="Large Visualization 1", use_container_width=True)
+        st.text_area("Description for Large Visualization 1", "Add detailed explanation for this large visualization.", height=150, key="desc_big1")
+        st.markdown("---")
+        # row 2 two side by side
+        col3, col4 = st.columns(2)
+        with col3:
+            st.image("New Visuals/2019_umap_plot.png", caption="g", use_container_width=True)
+            st.text_area("Description for Visualization 3", "Add detailed explanation for Visualization 3 here.", height=150, key="desc_vis3")
+        with col4:
+            st.image("New Visuals/2024_umap_plot.png", caption="Visualization 4", use_container_width=True)
+            st.text_area("Description for Visualization 4", "Add detailed explanation for Visualization 4 here.", height=150, key="desc_vis4")
+        st.markdown("---")
+        col5, col6 = st.columns(2)
+        with col5:
+            st.image("New Visuals/covid_case_count.png", caption="g", use_container_width=True)
+            st.text_area("Description for Visualization 5", "Add detailed explanation for Visualization 5 here.", height=150, key="desc_vis5")
+        with col6:
+            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Visualization 4", use_container_width=True)
+            st.text_area("Description for Visualization 6", "Add detailed explanation for Visualization 6 here.", height=150, key="desc_vis6")
+        st.markdown("---")
+        # final big visualization
+        st.image("New Visuals/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
+        st.text_area("Description for Large Visualization 2", "Add detailed explanation for this final visualization.", height=150, key="desc_big2")
+
 
     # ---------------------------
     # Tab 2: Interactive Search

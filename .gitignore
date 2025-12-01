@@ -22,6 +22,8 @@ merge_csv.py
 test.py
 scripts_to_ignore/
 test.py
+fnMap.py
+loan_fraud_cluster_summary.csv
 training_changes.py
 visuals/
 __pycache__/

@@ -14,9 +14,9 @@ from urllib.parse import urlparse
 
 # Load local data
 print("Loading article labels...")
-labels_df = pd.read_csv("combined_articles.csv")
+labels_df = pd.read_csv("outputs_new_prompt/combined_articles.csv")
 print("Loading local embeddings parquet...")
-emb_df = pd.read_parquet(r"combined_embeddings.parquet")
+emb_df = pd.read_parquet(r"outputs_new_prompt/combined_embeddings.parquet")
 
 # Helper functions mostly copy and pasted from embeds and old vis code
 def normalize_url(u):
@@ -190,7 +190,6 @@ def fraud_magnitude_by_group(df, save_path="fraud_mean_amount_by_group.png"):
     df = df.copy()
 
     # Keep only valid numeric amounts > 0
-    df = df[df["amount_numeric"].notna() & (df["amount_numeric"] > 0)]
 
     # Compute mean amount by fraud_group_primary
     agg_df = df.groupby("fraud_group_primary").agg(
@@ -346,72 +345,11 @@ def fraud_group_mds_map(df):
     plt.show()
     plt.close()
 
-# Semantic + Amount Outlier Analysis
-def semantic_amount_outliers(df, top_n=20):
-    df = df.copy()
-    
-    # find group centroids
-    centroids = df.groupby("fraud_group_primary")["embedding_clean"].apply(
-        lambda x: np.mean(np.vstack(x.values), axis=0)
-    )
-    # Compfindute semantic distance from group centroid
-    def semantic_distance(row):
-        group = row["fraud_group_primary"]
-        centroid = centroids[group]
-        return cosine_distances([row["embedding_clean"]], [centroid])[0, 0]
-    
-    df["semantic_distance"] = df.apply(semantic_distance, axis=1)
-    
-    # Filter out rows with zero or unknown amounts
-    df = df[df["amount_numeric"].notna() & (df["amount_numeric"] > 0)]
-    
-    # Log transform amount to remove skew
-    df["log_amount"] = np.log1p(df["amount_numeric"])
-    
-    # Scatterplot: semantic distance v log amount
-    plt.figure(figsize=(12, 7))
-    sb.scatterplot(
-        data=df, 
-        x="semantic_distance", 
-        y="log_amount", 
-        hue="fraud_group_primary",
-        alpha=0.7,
-        palette="tab10"
-    )
-    
-    # Highlight top N semantic outliers
-    top_outliers = df.nlargest(top_n, "semantic_distance")
-    plt.scatter(
-        top_outliers["semantic_distance"], 
-        top_outliers["log_amount"], 
-        color="red", 
-        edgecolor="black", 
-        s=100, 
-        label=f"Top {top_n} Semantic Outliers"
-    )
-    
-    # Add small labels for outliers
-    for _, row in top_outliers.iterrows():
-        label = row.get("fraud_group_secondary", row["fraud_group_primary"])
-        plt.text(
-            row["log_amount"],
-            row["semantic_distance"] + 0.005,
-            str(label), 
-            fontsize=7,
-            alpha=0.8
-        )
-    
-    plt.title("Combined Semantic + Amount Outliers in Fraud Cases")
-    plt.xlabel("Semantic Distance from Fraud Group Centroid")
-    plt.ylabel("Log(Amount Involved)")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-    plt.grid(alpha=0.3)
-    plt.tight_layout()
-    plt.savefig("semantic_amount_outliers.png", dpi=300)
-    plt.show()
-    plt.close()
-
 
 #the best way to run this is to call funcs directly, otherwise it gets hairy
 if __name__ == "__main__":
-    semantic_amount_outliers(merged, top_n=20)
+    fraud_group_mds_map(merged)
+    fraud_group_dendrogram(merged)
+    fraud_vs_detection_similarity(merged, save_path="fraud_detection_similarity_heatmap.png")
+    loan_fraud_secondary_hist(merged, save_path="loan_fraud_secondary_counts.png")
+    fraud_magnitude_by_group(merged, save_path="fraud_mean_amount_by_group.png")

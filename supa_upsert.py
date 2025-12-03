@@ -16,35 +16,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # -------------------------
-# Load dataset
-# -------------------------
-path = r"outputs_new_prompt\last\oig_article_embedding_full.parquet"  # raw string for Windows paths
-print(f"Loading: {path}")
-
-if path.endswith(".csv"):
-    df = pd.read_csv(path)
-else:
-    df = pd.read_parquet(path)
-
-print("Rows loaded:", len(df))
-
-# -------------------------
-# Required columns for Supabase
-# -------------------------
-columns_in_supabase = {"url", "text", "embedding", "relevance_score"}  # adjust to match your table
-missing = {"url", "text", "embedding"} - set(df.columns)
-if missing:
-    raise ValueError(f"Missing required columns: {missing}")
-
-# -------------------------
-# Clean text & drop duplicates
-# -------------------------
-df = df[df["text"].notna() & (df["text"].str.strip() != "")]
-df = df.drop_duplicates(subset=["url"], keep="first")
-print("Rows after cleaning text & duplicates:", len(df))
-
-# -------------------------
-# Recursive JSON-safe conversion
+# Helper functions
 # -------------------------
 def make_json_safe(obj):
     """
@@ -66,9 +38,6 @@ def make_json_safe(obj):
         return None
     return obj
 
-# -------------------------
-# Clean embeddings
-# -------------------------
 def clean_embedding(x):
     if isinstance(x, str):
         try:
@@ -81,56 +50,105 @@ def clean_embedding(x):
         return [0.0 if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))) else float(v) for v in x]
     return None
 
-df["embedding"] = df["embedding"].apply(clean_embedding)
+def batch_upsert(records, table_name, conflict_key="url", batch_size=50, max_retries=3):
+    """
+    Upsert records into Supabase in batches with retry logic
+    """
+    total_batches = math.ceil(len(records) / batch_size)
+    print(f"Beginning upsert into {table_name} ({len(records)} records, {total_batches} batches)...")
+
+    for i in range(total_batches):
+        batch = records[i*batch_size:(i+1)*batch_size]
+        for attempt in range(1, max_retries+1):
+            try:
+                print(f"Uploading batch {i+1}/{total_batches} (attempt {attempt})...")
+                supabase.table(table_name).upsert(batch, on_conflict=conflict_key).execute()
+                break  # success
+            except Exception as e:
+                print(f"Batch {i+1} attempt {attempt} failed: {e}")
+                if attempt == max_retries:
+                    raise
+                time.sleep(2)
+    print(f"Upsert into {table_name} complete.\n")
+
 
 # -------------------------
-# Clean numeric columns
+# Upsert CSV: Article Labels & Text
 # -------------------------
-if "relevance_score" in df.columns:
-    df["relevance_score"] = df["relevance_score"].apply(
+csv_path = r"outputs_new_prompt/combined_articles.csv"
+print(f"Loading CSV: {csv_path}")
+df_csv = pd.read_csv(csv_path)
+
+# Filter out unwanted columns
+columns_to_remove = [
+    "Unnamed: 18","Unnamed: 19","Unnamed: 20","Unnamed: 21","Unnamed: 22",
+    "Unnamed: 23","Unnamed: 24","Unnamed: 25","Unnamed: 26"
+]
+df_csv = df_csv.drop(columns=[c for c in columns_to_remove if c in df_csv.columns])
+
+# Drop rows without a valid "fraud_group_primary"
+df_csv = df_csv[df_csv["fraud_group_primary"].notna() & (df_csv["fraud_group_primary"].str.strip() != "")]
+print("Rows after filtering fraud_group_primary:", len(df_csv))
+
+# Drop duplicates based on URL
+df_csv = df_csv.drop_duplicates(subset=["url"], keep="first")
+def clean_numeric_value(x):
+    try:
+        return float(x)
+    except (ValueError, TypeError):
+        return None
+
+# Apply to amount_numeric if the column exists
+if "amount_numeric" in df_csv.columns:
+    df_csv["amount_numeric"] = df_csv["amount_numeric"].apply(clean_numeric_value)
+# Replace NaN with None for JSON upload
+df_csv = df_csv.where(pd.notnull(df_csv), None)
+
+# Convert to records & JSON-safe
+records_csv = df_csv.to_dict(orient="records")
+records_csv = [make_json_safe(r) for r in records_csv]
+
+# Upsert
+batch_upsert(records_csv, "final_article_label_dataset", conflict_key="url")
+
+
+# -------------------------
+# Upsert Parquet: Full Article Embeddings
+# -------------------------
+parquet_path = r"outputs_new_prompt/combined_embeddings.parquet"
+print(f"Loading Parquet: {parquet_path}")
+df_parquet = pd.read_parquet(parquet_path)
+print("Rows loaded:", len(df_parquet))
+
+# Required columns for Supabase
+columns_in_supabase = {"url", "text", "embedding", "relevance_score"}
+missing = columns_in_supabase - set(df_parquet.columns)
+if missing:
+    raise ValueError(f"Missing required columns: {missing}")
+
+# Drop rows with missing text
+df_parquet = df_parquet[df_parquet["text"].notna() & (df_parquet["text"].str.strip() != "")]
+df_parquet = df_parquet.drop_duplicates(subset=["url"], keep="first")
+print("Rows after cleaning text & duplicates:", len(df_parquet))
+
+# Clean embeddings
+df_parquet["embedding"] = df_parquet["embedding"].apply(clean_embedding)
+
+# Clean numeric columns
+if "relevance_score" in df_parquet.columns:
+    df_parquet["relevance_score"] = df_parquet["relevance_score"].apply(
         lambda x: float(x) if x is not None and not (math.isnan(x) or math.isinf(x)) else None
     )
 
-# -------------------------
-# Drop columns not in Supabase
-# -------------------------
-df = df[[c for c in df.columns if c in columns_in_supabase]]
+# Keep only Supabase columns
+df_parquet = df_parquet[[c for c in df_parquet.columns if c in columns_in_supabase]]
 
-# -------------------------
-# Replace top-level NaN → None
-# -------------------------
-df = df.where(pd.notnull(df), None)
+# Replace NaN with None
+df_parquet = df_parquet.where(pd.notnull(df_parquet), None)
 
-# -------------------------
-# Convert to records & make JSON-safe
-# -------------------------
-records = df.to_dict(orient="records")
-records = [make_json_safe(r) for r in records]
+# Convert to records & JSON-safe
+records_parquet = df_parquet.to_dict(orient="records")
+records_parquet = [make_json_safe(r) for r in records_parquet]
 
-print("Prepared", len(records), "records for upload.")
-
-# -------------------------
-# Batch upsert with retries
-# -------------------------
-BATCH_SIZE = 50  # small batch to avoid timeout
-MAX_RETRIES = 3
-total_batches = math.ceil(len(records) / BATCH_SIZE)
-
-print("Beginning upsert...")
-
-for i in range(total_batches):
-    batch = records[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
-    for attempt in range(1, MAX_RETRIES+1):
-        try:
-            print(f"Uploading batch {i+1}/{total_batches} (attempt {attempt})...")
-            response = supabase.table("oig_articles_embeddings").upsert(
-                batch, on_conflict="url"
-            ).execute()
-            break  # success
-        except Exception as e:
-            print(f"Batch {i+1} attempt {attempt} failed: {e}")
-            if attempt == MAX_RETRIES:
-                raise
-            time.sleep(2)
-
-print("Upsert complete.")
+# Upsert
+batch_upsert(records_parquet, "final_embeddings_dataset", conflict_key="url")

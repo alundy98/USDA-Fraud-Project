@@ -108,7 +108,6 @@ def safe_openai_call(func, *args, retries=3, backoff=5, **kwargs):
     st.error("OpenAI calls failed after retries.")
     return None
 
-
 def get_ai_embeds(texts: List[str], model_name: str = OPENAI_EMBEDDING_MODEL, chunk_size: int = EMBED_CHUNK_SIZE) -> List[List[float]]:
     embeddings = []
     for text in texts:
@@ -456,34 +455,29 @@ def run_scraper_and_process(user_input: str, supabase):
                 "published_full": full_date_str,
                 "text": article_text
             })
-
             time.sleep(1)
-
         page += 1
         time.sleep(1)
-
     if not collected:
         return {"inserted_count": 0, "top5": [], "errors": ["No articles were scraped."]}
-
-    # 4. Clean Text
+    # Clean Text
     for row in collected:
         row["cleaned_text"] = clean_text(row["text"])
-
-    # 5. Summarize
+    # Summarize
     for row in collected:
         try:
             row["summary"] = summarize_text(row["cleaned_text"])
         except Exception:
             row["summary"] = "Summary unavailable."
 
-    # 6. Embedding
+    # Embedding
     for row in collected:
         try:
             row["embedding"] = get_embedding(row["cleaned_text"])
         except Exception:
             row["embedding"] = []
 
-    # 7. Fraud Classification
+    # Fraud Classification
     for row in collected:
         try:
             label = classify_fraud(row["cleaned_text"])
@@ -491,7 +485,7 @@ def run_scraper_and_process(user_input: str, supabase):
         except Exception:
             row["fraud_type"] = "Unknown"
 
-    # 8. Insert into Supabase
+    # Insert into Supabase
     inserted_count = 0
     errors = []
 
@@ -551,7 +545,7 @@ def main():
         st.error(f"Supabase init failed: {e}")
         st.stop()
 
-    # Tabs: Visualizations, Interactive Search, Run Scraper
+    # Visualizations, Interactive Search, Run Scraper
     tab1, tab2, tab3 = st.tabs(["Visualizations and Findings", "Interactive Search", "Run Scraper"])
 
     # visuals
@@ -560,36 +554,40 @@ def main():
         # row 1 two side by side
         col1, col2 = st.columns(2)
         with col1:
-            st.image("fraud_group_counts.png", caption="Visualization 1", use_container_width=True)
-            st.text_area("Description for Visualization 1", "Add detailed explanation for Visualization 1 here.", height=150, key="desc_vis1")
+            st.image("fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
+            st.text_area("Prominent fraud types", "Loan Fraud comprises the majority of FDIC fraud cases.", height=150, key="desc_vis1")
         with col2:
-            st.image("loan_fraud_secondary_counts.png", caption="Visualization 2", use_container_width=True)
-            st.text_area("Description for Visualization 2", "Add detailed explanation for Visualization 2 here.", height=150, key="desc_vis2")
+            st.image("loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
+            st.text_area("Prominent traits of other fraud types in Loan Fraud cases", "Money Laundering fraud traits and detection methods often show up in loan fraud cases.", height=150, key="desc_vis2")
         st.markdown("---")
         # big visualization
-        st.image("visuals/ semantic_drift_of_fraud_narratives_over_years.png", caption="Large Visualization 1", use_container_width=True)
-        st.text_area("Description for Large Visualization 1", "Add detailed explanation for this large visualization.", height=150, key="desc_big1")
+        st.image("visuals/semantic_drift_of_fraud_narratives_over_years.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
+        st.text_area("How much fraud changes year to year", "Shows a big shift in how fraud is carried out in 2018-2020, before declining lower than ever now.", height=150, key="desc_big1")
         st.markdown("---")
         # row 2 two side by side
         col3, col4 = st.columns(2)
         with col3:
-            st.image("New Visuals/2019_umap_plot.png", caption="g", use_container_width=True)
-            st.text_area("Description for Visualization 3", "Add detailed explanation for Visualization 3 here.", height=150, key="desc_vis3")
+            st.image("New Visuals/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.text_area("2019", "An even scattering, no clear pattern", height=150, key="desc_vis3")
         with col4:
-            st.image("New Visuals/2024_umap_plot.png", caption="Visualization 4", use_container_width=True)
-            st.text_area("Description for Visualization 4", "Add detailed explanation for Visualization 4 here.", height=150, key="desc_vis4")
+            st.image("New Visuals/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.text_area("2025", "A clear band surrounds cases, much tighter together, cyber fraud in a line through the middle", height=150, key="desc_vis4")
         st.markdown("---")
         col5, col6 = st.columns(2)
         with col5:
-            st.image("New Visuals/covid_case_count.png", caption="g", use_container_width=True)
-            st.text_area("Description for Visualization 5", "Add detailed explanation for Visualization 5 here.", height=150, key="desc_vis5")
+            st.image("New Visuals/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
+            st.text_area("Over 50% of Loan Fraud Covid Related", "Indicates a certain kind of fraud being especially prominent", height=150, key="desc_vis5")
         with col6:
-            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Visualization 4", use_container_width=True)
-            st.text_area("Description for Visualization 6", "Add detailed explanation for Visualization 6 here.", height=150, key="desc_vis6")
+            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
+            st.text_area("Detection Method Proportions", "Shows the detection methods being used for each cluster of Loan Fraud", height=150, key="desc_vis6")
         st.markdown("---")
         # final big visualization
         st.image("New Visuals/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
-        st.text_area("Description for Large Visualization 2", "Add detailed explanation for this final visualization.", height=150, key="desc_big2")
+        st.text_area("Description for Large Visualization 2", "Cluster 0: Internal banking misconduct, Asset Diversion Fraud, COVID related loan fraud. " \
+        "Cluster 1: Identity Fraud related Loan Fraud cases, lower money amounts. " \
+        "Cluster 2:Loan Fraud involving internal account manipulation. " \
+        "Cluster 3: Loan Fraud involving false COVID relief claims, no internal misconduct, PPP loans. " \
+        "Cluster 4: Employment Misrepresentation, Fake Business PPP loans", height=150, key="desc_big2")
 
 
     # ---------------------------
@@ -603,7 +601,6 @@ def main():
             top_k = st.number_input("Number of results to return", min_value=1, max_value=20, value=5, step=1)
         with c2:
             run_search = st.button("Search")
-
         if run_search:
             if not user_query or not user_query.strip():
                 st.warning("Please enter a query.")
@@ -626,9 +623,7 @@ def main():
                             st.write(display_snip)
                         st.markdown("---")
 
-    # ---------------------------
-    # Tab 3: Run Scraper
-    # ---------------------------
+    # Run Scraper
     with tab3:
         st.header("Run Scraper")
         st.markdown(
@@ -639,25 +634,21 @@ def main():
             After the run, the dashboard will display the 5 most recent articles from this run that do not have an 'Unknown' fraud type.
             """
         )
-
         scraper_input = st.text_input(
             "Enter comma-separated URLs or query-URLs for scraping",
             placeholder="https://example.com/article1, https://example.com/article2"
         )
-
         if st.button("Run Scraper and Process"):
             if not scraper_input or not scraper_input.strip():
                 st.warning("Please enter one or more URLs / query-URLs for the scraper.")
             else:
                 with st.spinner("Running scraper, embeddings, and classification... This can take a while depending on number of items and OpenAI latency."):
                     result = run_scraper_and_process(scraper_input, supabase)
-
                 st.success(f"Inserted {result.get('inserted', 0)} articles (attempted).")
                 if result.get("errors"):
                     st.warning("Some items had issues:")
                     for e in result["errors"]:
                         st.write(f"- {e}")
-
                 top5 = result.get("top5", [])
                 if not top5:
                     st.info("No recent classified articles (non-Unknown) found for this run.")

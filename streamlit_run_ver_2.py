@@ -21,6 +21,7 @@ from bs4 import BeautifulSoup
 from supabase import create_client, Client
 import numpy as np
 import openai
+from openai import Client as openai_client
 from openai import OpenAI
 import nltk
 from nltk.corpus import stopwords
@@ -112,7 +113,6 @@ def fetch_embeddings_from_table(supabase_client: Client, table_name: str, embedd
         if emb is None:
             continue
         candidates.append({
-            "id": r.get("id"),
             "title": r.get("title") or r.get("name") or "Untitled",
             "url": r.get("url") or r.get("link") or None,
             "content": r.get("content") or r.get("snippet") or "",
@@ -130,7 +130,7 @@ def semantic_search(query: str, supabase_client: Client, table_names: List[str],
         all_candidates.extend(cand)
     if not all_candidates:
         return []
-    query_emb = [0.0]*FALLBACK_EMB_DIM  # fallback; actual embeddings generated externally
+    query_emb = [0.0]*FALLBACK_EMB_DIM 
     for c in all_candidates:
         try:
             c["score"] = cosine_similarity(query_emb, c["embedding"])
@@ -158,7 +158,7 @@ def main():
         st.stop()
 
     # Tabs
-    tab1, tab2, tab3 = st.tabs(["Visualizations and Findings", "Interactive Search", "Run Scraper"])
+    tab1, tab2, tab3, tab4= st.tabs(["Visualizations and Findings", "Interactive Search","Emerging Trends in the Fraud Space", "Run Scraper"])
 
     # Tab 1: Visualizations
     with tab1:
@@ -196,68 +196,304 @@ def main():
             "Cluster 2:Loan Fraud involving internal account manipulation. " \
             "Cluster 3: Loan Fraud involving false COVID relief claims, no internal misconduct, PPP loans. " \
             "Cluster 4: Employment Misrepresentation, Fake Business PPP loans", height=150, key="desc_big2")
-
-    # Tab 2: Interactive Search
+    #semantic search tab
     with tab2:
-        st.header("Interactive Fraud Knowledge Search")
-        user_query = st.text_area("Ask a question about fraud", height=120)
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            top_k = st.number_input("Number of results to return", min_value=1, max_value=20, value=5, step=1)
-        with c2:
-            run_search = st.button("Search")
-
-        if run_search:
-            if not user_query or not user_query.strip():
-                st.warning("Please enter a query.")
+        st.header("Semantic Search: Fraud Knowledge")
+        st.write("Ask a question about fraud and receive a summarized answer along with the most relevant articles from the dataset.")
+        question = st.text_area("Enter your question about fraud:")
+        num_results = st.number_input("Results to return:", min_value=1, max_value=20, value=5)
+        if st.button("Search"):
+            if not question.strip():
+                st.warning("Please enter a question before searching.")
             else:
-                with st.spinner("Searching for relevant articles..."):
-                    # Step 1: Get top-K relevant articles from Supabase embeddings
-                    results = semantic_search(user_query, supabase, SUPABASE_TABLES, top_k=int(top_k))
-                
-                if not results:
-                    st.info("No related articles found. GPT will answer based on its knowledge alone.")
-                    context_text = ""
-                else:
-                    # Prepare context for GPT
-                    context_parts = []
-                    for r in results:
-                        summary = r.get("content", "")
-                        title = r.get("title", "Untitled")
-                        full_date = r.get("full_date", "Unknown date")
-                        url = r.get("url", "")
-                        context_parts.append(f"Title: {title}\nDate: {full_date}\nURL: {url}\nSummary: {summary}\n")
-                    context_text = "\n---\n".join(context_parts)
+                try:
+                    article_rows = supabase.table("final_article_label_dataset").select("title,url,full_date,summary,fraud_group_primary,location,clean_text").limit(5000).execute().data
+                    emb_rows = supabase.table("final_embeddings_dataset").select("url,embedding").limit(5000).execute().data
+                    for row in emb_rows:
+                        if isinstance(row["embedding"], str):
+                            row["embedding"] = json.loads(row["embedding"])
+                    url_to_emb = {row["url"]: row["embedding"] for row in emb_rows}
+                    articles_with_emb = [{**article, "embedding": url_to_emb[article["url"]]} for article in article_rows if article["url"] in url_to_emb]
+                    filtered_articles = [a for a in articles_with_emb if a.get("location","").strip().lower() != "unknown"]
+                    if not filtered_articles:
+                        st.warning("No articles with valid locations found.")
+                    else:
+                        question_embedding = client.embeddings.create(model="text-embedding-3-small", input=question).data[0].embedding
+                        import numpy as np
+                        for article in filtered_articles:
+                            article["score"] = np.dot(np.array(question_embedding), np.array(article["embedding"])) / (np.linalg.norm(question_embedding) * np.linalg.norm(article["embedding"]))
+                        top_articles = sorted(filtered_articles, key=lambda x: x["score"], reverse=True)[:num_results]
+                        # AI-format each summary
+                        for article in top_articles:
+                            prompt = f"Fix the formatting of this text. Ensure proper spaces, punctuation, capitalization, and remove any 'unknown' placeholders:\n\n{article.get('summary','')}"
+                            formatted_response = client.chat.completions.create(model="gpt-4.1-mini", messages=[{"role":"user","content":prompt}], temperature=0)
+                            article["summary"] = formatted_response.choices[0].message.content.strip()
+                        # AI answers the question
+                        answer_prompt = f"Based on the following top {num_results} articles, answer the question concisely and clearly.\nQuestion: {question}\nArticles:{''.join([f'Title: {a['title']}\nSummary: {a['summary']}\nLocation: {a['location']}\n\n' for a in top_articles])}\nAnswer clearly, using proper punctuation, capitalization, and excluding unknown values."
+                        response = client.chat.completions.create(model="gpt-4.1-mini", messages=[{"role":"user","content":answer_prompt}], temperature=0)
+                        ai_answer = response.choices[0].message.content.strip()
+                        st.subheader("Answer")
+                        st.write(ai_answer)
+                        st.subheader("Relevant Articles")
+                        for article in top_articles:
+                            st.markdown(f"**{article['title']}**")
+                            st.markdown(f"*Date:* {article.get('full_date', 'Unknown')}")
+                            st.markdown(f"*Location:* {article.get('location', 'Unknown')}")
+                            st.markdown(f"{article['summary']}")
+                            st.markdown("---")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
 
-                # Step 2: Ask GPT-4o-mini
-                prompt = f"""
-    You are a knowledgeable fraud detection assistant. Answer the user's question using your knowledge and the following context from FDIC/OIG articles. 
-
-    Context:
-    {context_text}
-
-    Instructions:
-    1. Answer the question as completely and accurately as possible.
-    2. After your answer, list the top {top_k} articles from the context that support your answer, including title, URL, summary, and date. 
-    3. If none of the articles are relevant, do not list any.
-
-    User Question: {user_query}
-    """
-
-                with st.spinner("Generating GPT answer..."):
-                    try:
-                        gpt_response = client.chat.completions.create(
-                            model=OPENAI_CHAT_MODEL,
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0.0,
-                        )
-                        answer_text = gpt_response.choices[0].message.content
-                        st.markdown("### GPT-4o-mini Answer")
-                        st.write(answer_text)
-                    except Exception as e:
-                        st.error(f"Error generating GPT answer: {e}")
-    # Tab 3: Scraper + Embeddings
+    # tab4 emerging fraud signals dashboard
     with tab3:
+        st.header("Emerging Fraud Signals Dashboard")
+        st.write("This dashboard identifies rising fraud themes, shows trend charts, and provides cluster-level fraud group & detection insights.")
+        if st.button("Analyze Emerging Signals"):
+            with st.spinner("Analyzing"):
+                try:
+                    article_rows = supabase.table("final_article_label_dataset").select(
+                        "title,url,full_date,published,clean_text,summary,fraud_group_primary,fraud_group_secondary,detection_method,location,amount_involved,amount_numeric"
+                    ).limit(5000).execute().data
+                    emb_rows = supabase.table("final_embeddings_dataset").select("url,embedding").limit(5000).execute().data
+                    if not article_rows or not emb_rows:
+                        st.error("No articles or embeddings found in the dataset.")
+                    else:
+                        import numpy as np
+                        import pandas as pd
+                        from sklearn.cluster import KMeans
+                        from sklearn.decomposition import PCA
+                        from sklearn.feature_extraction.text import TfidfVectorizer
+                        from collections import Counter, defaultdict
+
+                        # normalize embeddings (convert JSON strings to lists if needed)
+                        for r in emb_rows:
+                            if isinstance(r.get("embedding"), str):
+                                try:
+                                    r["embedding"] = json.loads(r["embedding"])
+                                except Exception:
+                                    r["embedding"] = None
+                        url_to_emb = {r["url"]: r["embedding"] for r in emb_rows if r.get("url") and r.get("embedding")}
+                        # join articles with embeddings via url
+                        articles = []
+                        for a in article_rows:
+                            url = a.get("url")
+                            emb = url_to_emb.get(url)
+                            if not url or emb is None:
+                                continue
+                            articles.append({
+                                "title": a.get("title",""),
+                                "url": url,
+                                "date": a.get("full_date") or a.get("published") or "",
+                                "clean_text": a.get("clean_text") or "",
+                                "summary": a.get("summary") or "",
+                                "fraud_group_primary": a.get("fraud_group_primary") or "",
+                                "fraud_group_secondary": a.get("fraud_group_secondary") or "",
+                                "detection_method": a.get("detection_method") or "",
+                                "location": a.get("location") or "",
+                                "amount_numeric": a.get("amount_numeric") or a.get("amount_involved") or None,
+                                "embedding": np.array(emb, dtype=np.float32)
+                            })
+                        if len(articles) == 0:
+                            st.error("No valid embeddings found after matching articles and embeddings.")
+                        else:
+                            # build data structures
+                            df = pd.DataFrame(articles)
+                            # cluster on reduced embeddings
+                            X = np.vstack(df["embedding"].values)
+                            n_components = min(30, X.shape[1])
+                            if n_components < 2:
+                                X_reduced = X
+                            else:
+                                pca = PCA(n_components=n_components, random_state=42)
+                                X_reduced = pca.fit_transform(X)
+                            k = 6
+                            kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+                            labels = kmeans.fit_predict(X_reduced)
+                            df["cluster"] = labels
+                            # cluster counts
+                            st.subheader("Cluster counts")
+                            cluster_counts = df["cluster"].value_counts().sort_index()
+                            st.bar_chart(cluster_counts)
+                            # monthly trends table
+                            st.subheader("Fraud theme trends over time (by cluster)")
+                            parsed_months = []
+                            for d in df["date"].fillna(""):
+                                try:
+                                    parsed_months.append(pd.to_datetime(d).strftime("%Y-%m"))
+                                except Exception:
+                                    parsed_months.append("unknown")
+                            df["ym"] = parsed_months
+                            monthly = df[df["ym"] != "unknown"].groupby(["ym","cluster"]).size().unstack(fill_value=0)
+                            monthly_sorted = monthly.sort_index()
+                            if not monthly_sorted.empty:
+                                st.line_chart(monthly_sorted)
+                            # prepare text for TF-IDF: augment with fraud group + detection method
+                            df["aug_text"] = (df["clean_text"].fillna("") + " " + df["fraud_group_primary"].fillna("") + " " + df["detection_method"].fillna("")).str.strip()
+                            # Extract candidate keywords per cluster using TF-IDF
+                            cluster_candidates = {}
+                            vectorizer = TfidfVectorizer(max_features=5000, stop_words="english", ngram_range=(1,2))
+                            try:
+                                tfidf_all = vectorizer.fit_transform(df["aug_text"].fillna(""))
+                                feature_names = np.array(vectorizer.get_feature_names_out())
+                                for cl in range(k):
+                                    idxs = np.where(df["cluster"].values == cl)[0]
+                                    if len(idxs) == 0:
+                                        cluster_candidates[cl] = []
+                                        continue
+                                    submatrix = tfidf_all[idxs]
+                                    # mean tfidf per term within cluster
+                                    mean_tfidf = np.asarray(submatrix.mean(axis=0)).ravel()
+                                    top_indices = mean_tfidf.argsort()[::-1][:60]  # candidate pool
+                                    cluster_candidates[cl] = list(feature_names[top_indices])
+                            except Exception:
+                                # fallback: simple word frequency
+                                for cl in range(k):
+                                    texts = df[df["cluster"]==cl]["aug_text"].str.cat(sep=" ")
+                                    tokens = re.findall(r"\w[\w\-']+", texts.lower())
+                                    most = [w for w,c in Counter(tokens).most_common(30)]
+                                    cluster_candidates[cl] = most
+                            # enforce exclusivity: remove keywords that appear as top candidates in multiple clusters
+                            candidate_counts = Counter()
+                            for cl, kws in cluster_candidates.items():
+                                # consider only top 20 candidates per cluster for overlap counting
+                                for w in kws[:20]:
+                                    candidate_counts[w] += 1
+                            unique_keywords = {}
+                            for cl, kws in cluster_candidates.items():
+                                uniq = [w for w in kws if candidate_counts[w] == 1]
+                                if len(uniq) < 6:
+                                    # if too few unique words, allow words that appear at most twice
+                                    uniq = [w for w in kws if candidate_counts[w] <= 2][:12]
+                                unique_keywords[cl] = uniq[:12]
+                            # generate cluster summaries: fraud group counts, detection method counts, avg amount, representative articles
+                            st.subheader("Cluster summaries")
+                            cluster_summaries = []
+                            for cl in range(k):
+                                sub = df[df["cluster"]==cl]
+                                if sub.empty:
+                                    continue
+                                fraud_counts = Counter(sub["fraud_group_primary"].fillna("").astype(str))
+                                top_fraud = [f for f,c in fraud_counts.most_common(3) if f and f.lower()!="unknown"]
+                                detect_counts = Counter(sub["detection_method"].fillna("").astype(str))
+                                top_detect = [d for d,c in detect_counts.most_common(3) if d and d.lower()!="unknown"]
+                                # avg amount numeric if present
+                                amounts = pd.to_numeric(sub["amount_numeric"], errors="coerce").dropna()
+                                avg_amount = float(amounts.mean()) if not amounts.empty else None
+                                # representative articles: nearest to cluster centroid
+                                centroid = kmeans.cluster_centers_[cl]
+                                # get embeddings projected to same space (X_reduced)
+                                cluster_idxs = sub.index.tolist()
+                                cluster_points = X_reduced[cluster_idxs]
+                                # compute distances
+                                dists = np.linalg.norm(cluster_points - centroid, axis=1)
+                                rep_idxs = np.array(cluster_idxs)[dists.argsort()[:5]].tolist()
+                                reps = []
+                                for ridx in rep_idxs:
+                                    row = df.loc[ridx]
+                                    reps.append({"title": row["title"], "url": row["url"], "date": row["date"], "summary": row["summary"] or row["clean_text"][:400]})
+                                cluster_summaries.append({
+                                    "cluster": cl,
+                                    "count": len(sub),
+                                    "keywords": unique_keywords.get(cl, [])[:8],
+                                    "top_fraud_groups": top_fraud,
+                                    "top_detection_methods": top_detect,
+                                    "avg_amount": avg_amount,
+                                    "representative_articles": reps
+                                })
+                            # display cluster summaries with detection & fraud group info
+                            for cs in cluster_summaries:
+                                st.markdown(f"### Cluster {cs['cluster']+1} — {cs['count']} articles")
+                                st.markdown(f"**Top unique keywords:** {', '.join(cs['keywords']) if cs['keywords'] else 'None'}")
+                                st.markdown(f"**Top fraud groups:** {', '.join(cs['top_fraud_groups']) if cs['top_fraud_groups'] else 'Unknown'}")
+                                st.markdown(f"**Top detection methods:** {', '.join(cs['top_detection_methods']) if cs['top_detection_methods'] else 'Unknown'}")
+                                if cs['avg_amount'] is not None:
+                                    try:
+                                        st.markdown(f"**Avg amount involved:** ${cs['avg_amount']:,.2f}")
+                                    except Exception:
+                                        st.markdown(f"**Avg amount involved:** {cs['avg_amount']}")
+                                st.markdown("**Representative articles:**")
+                                for r in cs['representative_articles']:
+                                    st.markdown(f"- [{r['title']}]({r['url']}) — {r.get('date','')}")
+                                st.markdown("---")
+                            # compute emerging score per cluster (z-score growth + trend slope + keyword novelty)
+                            st.subheader("Emerging cluster signals")
+                            recent_window = 6
+                            monthly = df[df["ym"] != "unknown"].groupby(["ym","cluster"]).size().unstack(fill_value=0)
+                            monthly_sorted = monthly.sort_index()
+                            growth_scores = {}
+                            novelty_scores = {}
+                            slope_scores = {}
+                            if monthly_sorted.shape[0] >= 2:
+                                # compute z-score growth (recent mean vs historical mean)
+                                for col in monthly_sorted.columns:
+                                    series = monthly_sorted[col].astype(float)
+                                    if len(series) < recent_window + 1:
+                                        growth_scores[col] = 0.0
+                                        slope_scores[col] = 0.0
+                                        novelty_scores[col] = 0.0
+                                        continue
+                                    recent = series[-recent_window:]
+                                    past = series[:-recent_window]
+                                    past_mean = past.mean() if len(past)>0 else 0.0
+                                    past_std = past.std() if len(past)>0 else 0.0
+                                    z = (recent.mean() - past_mean) / past_std if past_std>0 else 0.0
+                                    growth_scores[col] = float(z)
+                                    # slope (linear fit on recent window)
+                                    try:
+                                        idx = np.arange(len(recent))
+                                        slope = np.polyfit(idx, recent.values, 1)[0]
+                                    except Exception:
+                                        slope = 0.0
+                                    slope_scores[col] = float(slope)
+                                    # novelty: for cluster keywords, compare freq in recent_window vs previous 12 months
+                                    try:
+                                        recent_months = monthly_sorted.index[-recent_window:]
+                                        recent_sum = monthly_sorted.loc[recent_months, col].sum()
+                                        prev_period = monthly_sorted.index[:-recent_window]
+                                        prev_sum = monthly_sorted.loc[prev_period, col].sum() if len(prev_period)>0 else 0.0
+                                        novelty_scores[col] = float((recent_sum + 1) / (prev_sum + 1))
+                                    except Exception:
+                                        novelty_scores[col] = 1.0
+                            else:
+                                for col in range(k):
+                                    growth_scores[col] = 0.0
+                                    slope_scores[col] = 0.0
+                                    novelty_scores[col] = 1.0
+                            # normalize components and combine
+                            def normalize_dict(d):
+                                vals = np.array(list(d.values()), dtype=float)
+                                if vals.max() - vals.min() == 0:
+                                    return {k: 0.0 for k in d.keys()}
+                                mn, mx = vals.min(), vals.max()
+                                return {k: float((v-mn)/(mx-mn)) for k,v in d.items()}
+                            g_norm = normalize_dict(growth_scores)
+                            s_norm = normalize_dict(slope_scores)
+                            n_norm = normalize_dict(novelty_scores)
+                            emerg_scores = {}
+                            for col in growth_scores.keys():
+                                emerg_scores[col] = 0.5 * g_norm.get(col,0.0) + 0.3 * s_norm.get(col,0.0) + 0.2 * n_norm.get(col,0.0)
+                            gs_series = pd.Series(emerg_scores).sort_values(ascending=False)
+                            st.write(gs_series)
+                            # top emerging cluster details
+                            if not gs_series.empty:
+                                top_cluster = int(gs_series.index[0])
+                                st.subheader(f"Representative articles for emerging cluster {top_cluster+1}")
+                                reps = df[df["cluster"]==top_cluster].sort_values(by="date", ascending=False).head(5)
+                                for _, r in reps.iterrows():
+                                    st.markdown(f"**[{r['title']}]({r['url']})**")
+                                    st.markdown(f"*Date:* {r['date']}  •  *Location:* {r['location'] or 'Unknown'}")
+                                    # clean summary similarly to Tab2 lightly
+                                    summ = r.get("summary") or r.get("clean_text","")
+                                    summ = re.sub(r"[^\x00-\x7F]+"," ", summ)
+                                    summ = re.sub(r"\s+"," ", summ).strip()
+                                    st.write(summ[:800])
+                                    st.markdown("---")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+
+
+    # Tab 4 Scraper + Embeddings
+    with tab4:
         st.header("FDIC / FDIC-OIG Scraper & Embeddings Pipeline")
         st.write(
             """
@@ -281,7 +517,8 @@ def main():
                     if "fdicoig.gov" in article_url:
                         article_data = extract_oig_article(article_url)
                     else:
-                        article_data = extract_fdic_article(article_url)  # custom wrapper for FDIC
+                        #custom wrapper tfor fdic cases
+                        article_data = extract_fdic_article(article_url)
 
                     if not article_data:
                         st.error("Failed to scrape article.")
@@ -443,7 +680,7 @@ def main():
                         # Step 8: Upsert to Supabase
                         # -----------------------------
                         records = df_article.to_dict(orient="records")
-                        TABLE_NAME = "oig_articles"
+                        TABLE_NAME = "final_article_label_dataset"
                         upsert_resp = supabase.table(TABLE_NAME).upsert(records).execute()
                         st.success("Upserted article to Supabase.")
 

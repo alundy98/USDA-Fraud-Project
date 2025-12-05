@@ -139,6 +139,110 @@ def semantic_search(query: str, supabase_client: Client, table_names: List[str],
     all_candidates.sort(key=lambda x: x.get("score", -1.0), reverse=True)
     return all_candidates[:top_k]
 
+def classify_fraud_type(text: str) -> str:
+    # 1. Clean text using the same cleaning logic
+    cleaned = re.sub(r"https?://\S+|www\.\S+", " ", text)
+    cleaned = cleaned.translate(str.maketrans("", "", string.punctuation))
+    tokens = [
+        LEMMATIZER.lemmatize(w.lower())
+        for w in cleaned.split()
+        if w.lower() not in STOPWORDS and len(w) > 2
+    ]
+    cleaned_text = " ".join(tokens)
+
+    # 2. Summarize
+    prompt = f"""
+    Summarize the following article in 4–5 concise sentences for a financial crime dataset.
+    Focus on capturing:
+    - The main fraud or misconduct type
+    - Key players and events
+    - Amount involved
+    - Detection or prevention method
+    Article:
+    {cleaned_text}
+    """
+    summary_resp = client.chat.completions.create(
+        model=OPENAI_CHAT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+    summary = summary_resp.choices[0].message.content.strip()
+
+    # 3. Extract labels
+    label_prompt = f"""
+    Identify the following from this summary:
+    - fraud_type
+    Respond ONLY in JSON with:
+    {{
+        "fraud_type": ""
+    }}
+
+    Summary:
+    {summary}
+    """
+    label_resp = client.chat.completions.create(
+        model=OPENAI_CHAT_MODEL,
+        messages=[{"role": "user", "content": label_prompt}],
+        temperature=0
+    )
+
+    try:
+        labels = json.loads(label_resp.choices[0].message.content.strip())
+        return labels.get("fraud_type", "Unknown")
+    except:
+        return "Unknown"
+
+def classify_detection_type(text: str) -> str:
+    # 1. Clean text
+    cleaned = re.sub(r"https?://\S+|www\.\S+", " ", text)
+    cleaned = cleaned.translate(str.maketrans("", "", string.punctuation))
+    tokens = [
+        LEMMATIZER.lemmatize(w.lower())
+        for w in cleaned.split()
+        if w.lower() not in STOPWORDS and len(w) > 2
+    ]
+    cleaned_text = " ".join(tokens)
+
+    # 2. Summarize
+    prompt = f"""
+    Summarize the following article in 4–5 concise sentences for a financial crime dataset.
+    Focus on:
+    - Fraud type
+    - Detection method
+    Article:
+    {cleaned_text}
+    """
+    summary_resp = client.chat.completions.create(
+        model=OPENAI_CHAT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+    summary = summary_resp.choices[0].message.content.strip()
+
+    # 3. Extract detection method from the summary
+    label_prompt = f"""
+    Identify the detection method used in the case.
+    Respond ONLY in JSON with:
+    {{
+        "detection_method": ""
+    }}
+
+    Summary:
+    {summary}
+    """
+    label_resp = client.chat.completions.create(
+        model=OPENAI_CHAT_MODEL,
+        messages=[{"role": "user", "content": label_prompt}],
+        temperature=0
+    )
+
+    try:
+        labels = json.loads(label_resp.choices[0].message.content.strip())
+        return labels.get("detection_method", "Unknown")
+    except:
+        return "Unknown"
+
+
 # Streamlit App
 def main():
     st.set_page_config(page_title="USAA Fraud Detection Dashboard", layout="wide")
@@ -165,32 +269,32 @@ def main():
         st.header("Visualizations and Findings")
         col1, col2 = st.columns(2)
         with col1:
-            st.image("fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
+            st.image("/root/assets/fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
             st.text_area("Prominent fraud types", "Loan Fraud comprises the majority of FDIC fraud cases.", height=150, key="desc_vis1")
         with col2:
-            st.image("loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
+            st.image("/root/assets/loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
             st.text_area("Prominent traits of other fraud types in Loan Fraud cases", "Money Laundering fraud traits and detection methods often show up in loan fraud cases.", height=150, key="desc_vis2")
         st.markdown("---")
-        st.image("visuals/semantic_drift_of_fraud_narratives_over_years.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
+        st.image("/root/assets/Semantic_relation_drift_of_fraud_types2019-2025.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
         st.text_area("How much fraud changes year to year", "Shows a big shift in how fraud is carried out in 2018-2020, before declining lower than ever now.", height=150, key="desc_big1")
         st.markdown("---")
         col3, col4 = st.columns(2)
         with col3:
-            st.image("New Visuals/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.image("/root/assets/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
             st.text_area("2019", "An even scattering, no clear pattern", height=150, key="desc_vis3")
         with col4:
-            st.image("New Visuals/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.image("/root/assets/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
             st.text_area("2025", "A clear band surrounds cases, much tighter together, cyber fraud in a line through the middle", height=150, key="desc_vis4")
         st.markdown("---")
         col5, col6 = st.columns(2)
         with col5:
-            st.image("New Visuals/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
+            st.image("/root/assets/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
             st.text_area("Over 50% of Loan Fraud Covid Related", "Indicates a certain kind of fraud being especially prominent", height=150, key="desc_vis5")
         with col6:
-            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
+            st.image("/root/assets/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
             st.text_area("Detection Method Proportions", "Shows the detection methods being used for each cluster of Loan Fraud", height=150, key="desc_vis6")
         st.markdown("---")
-        st.image("New Visuals/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
+        st.image("/root/assets/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
         st.text_area("Description for Large Visualization 2", "Cluster 0: Internal banking misconduct, Asset Diversion Fraud, COVID related loan fraud. " \
             "Cluster 1: Identity Fraud related Loan Fraud cases, lower money amounts. " \
             "Cluster 2:Loan Fraud involving internal account manipulation. " \
@@ -229,7 +333,17 @@ def main():
                             formatted_response = client.chat.completions.create(model="gpt-4.1-mini", messages=[{"role":"user","content":prompt}], temperature=0)
                             article["summary"] = formatted_response.choices[0].message.content.strip()
                         # AI answers the question
-                        answer_prompt = f"Based on the following top {num_results} articles, answer the question concisely and clearly.\nQuestion: {question}\nArticles:{''.join([f'Title: {a['title']}\nSummary: {a['summary']}\nLocation: {a['location']}\n\n' for a in top_articles])}\nAnswer clearly, using proper punctuation, capitalization, and excluding unknown values."
+                        articles_text = "".join([
+    f"Title: {a['title']}\nSummary: {a['summary']}\nLocation: {a['location']}\n\n"
+    for a in top_articles
+])
+
+                        answer_prompt = (
+    f"Based on the following top {num_results} articles, answer the question concisely and clearly.\n"
+    f"Question: {question}\n"
+    f"Articles:\n{articles_text}\n"
+    "Answer clearly, using proper punctuation, capitalization, and excluding unknown values."
+)
                         response = client.chat.completions.create(model="gpt-4.1-mini", messages=[{"role":"user","content":answer_prompt}], temperature=0)
                         ai_answer = response.choices[0].message.content.strip()
                         st.subheader("Answer")
@@ -494,215 +608,178 @@ def main():
 
     # Tab 4 Scraper + Embeddings
     with tab4:
-        st.header("FDIC / FDIC-OIG Scraper & Embeddings Pipeline")
-        st.write(
-            """
-            Enter a single FDIC or FDIC-OIG article URL.  
-            The system will scrape the article, run embeddings, summarize it, label fraud types, cluster articles, and store results.
-            """
+        st.header("FDIC Article Keyword Search")
+
+        user_input = st.text_input(
+            "Enter keywords (comma-separated):",
+            placeholder="fraud, phishing, PPP, loan"
         )
 
-        article_url = st.text_input("Enter FDIC or FDIC-OIG article URL")
+        if st.button("Search FDIC"):
+            if not user_input.strip():
+                st.error("Please enter at least one keyword.")
+                st.stop()
 
-        if st.button("Run Scraper & Embeddings for this URL"):
-            if not article_url or not article_url.strip():
-                st.warning("Please enter a URL.")
-            elif "fdic.gov" not in article_url and "fdicoig.gov" not in article_url:
-                st.error("Only FDIC or FDIC-OIG article links are accepted.")
-            else:
-                st.info("Processing article and running embedding pipeline...")
+        # -------------------------
+        # 1. Parse Keywords
+        # -------------------------
+            keywords = [x.strip() for x in user_input.split(",") if x.strip()]
+            if not keywords:
+                st.error("No valid keywords were provided.")
+                st.stop()
 
+        # -------------------------
+        # 2. Build FDIC Search URL
+        # -------------------------
+            fdic_url_base = "https://www.fdic.gov/fdic-search?query="
+
+            query_string = ""
+            for word in keywords:
+                query_string += word
+                if word != keywords[-1]:
+                    query_string += "%20OR%20"
+
+            fdic_url = (
+                fdic_url_base
+                + query_string
+                + "%20-inactive&site=&orderby=date&pg={page}"
+            )
+
+            st.write("**Constructed FDIC Search URL:**")
+            st.code(fdic_url.format(page=1))
+
+        # -------------------------
+        # 3. Extract first 10 article links
+        # -------------------------
+            from FDIC_scraper import extract_html_text, extract_pdf_text, scrape_page
+
+            article_links = []
+            page = 1
+
+            while len(article_links) < 10:
+                search_url = fdic_url.format(page=page)
                 try:
-                    # Scraper
-                    if "fdicoig.gov" in article_url:
-                        article_data = extract_oig_article(article_url)
-                    else:
-                        #custom wrapper tfor fdic cases
-                        article_data = extract_fdic_article(article_url)
-
-                    if not article_data:
-                        st.error("Failed to scrape article.")
-                    else:
-                        st.success("Article scraped successfully.")
-                        st.json({
-                            "title": article_data.get("title"),
-                            "published": article_data.get("full_date"),
-                            "url": article_data.get("url")
-                        })
-
-                        # -----------------------------
-                        # Step 2: Clean Text
-                        # -----------------------------
-                        def clean_text(text: str) -> str:
-                            if not isinstance(text, str):
-                                return ""
-                            text = re.sub(r"https?://\S+|www\.\S+", " ", text)
-                            text = text.translate(str.maketrans("", "", string.punctuation))
-                            tokens = [
-                                LEMMATIZER.lemmatize(w.lower())
-                                for w in text.split()
-                                if w.lower() not in STOPWORDS and len(w) > 2
-                            ]
-                            return " ".join(tokens)
-
-                        clean_article = clean_text(article_data["text"])
-                        st.write("Cleaned text preview:")
-                        st.write(clean_article[:600] + "..." if len(clean_article) > 600 else clean_article)
-
-                        # -----------------------------
-                        # Step 3: Embedding
-                        # -----------------------------
-                        def get_ai_embeds(texts, model_name=OPENAI_EMBEDDING_MODEL, chunk_size=EMBED_CHUNK_SIZE):
-                            embeddings = []
-                            for text in texts:
-                                if not isinstance(text, str) or len(text.strip()) == 0:
-                                    embeddings.append(np.zeros(FALLBACK_EMB_DIM))
-                                    continue
-                                # split text into chunks
-                                chunks = [text[i:i + chunk_size * 4] for i in range(0, len(text), chunk_size * 4)]
-                                chunk_embs = []
-                                for chunk in chunks:
-                                    try:
-                                        response = client.embeddings.create(
-                                            model=model_name,
-                                            input=chunk
-                                        )
-                                        chunk_embs.append(response.data[0].embedding)
-                                    except Exception as e:
-                                        print(f"Embedding chunk skipped: {e}")
-                                        continue
-                                if chunk_embs:
-                                    emb = np.mean(chunk_embs, axis=0)
-                                else:
-                                    emb = np.zeros(FALLBACK_EMB_DIM)
-                                embeddings.append(emb)
-                            return embeddings
-
-                        embedding = get_ai_embeds([clean_article])[0]
-
-                        # -----------------------------
-                        # Step 4: Summarize Article
-                        # -----------------------------
-                        def summarize_article(text):
-                            prompt = f"""
-                            Summarize the following article in 4–5 concise sentences for a financial crime dataset.
-                            Focus on capturing:
-                            1. Who or what organization was involved.
-                            2. The main fraud or misconduct type.
-                            3. Whether it was detected after it occurred or prevented beforehand.
-                            4. Detection method.
-                            5. Key outcomes (fines, arrests, policy changes, etc.).
-                            6. Amount involved if mentioned.
-
-                            Article:
-                            {text}
-                            """
-                            response = client.chat.completions.create(
-                                model=OPENAI_CHAT_MODEL,
-                                messages=[{"role": "user", "content": prompt}],
-                                temperature=0.3
-                            )
-                            return response.choices[0].message.content.strip()
-
-                        summary = summarize_article(clean_article)
-                        st.write("Summary:")
-                        st.write(summary)
-
-                        # -----------------------------
-                        # Step 5: Get Fraud Type Labels
-                        # -----------------------------
-                        def get_fraud_type(summary_text):
-                            prompt = f"""
-                            You are analyzing a summary of a fraud-related article.
-                            Identify:
-                            1. Raw descriptive fraud type.
-                            2. Primary & secondary fraud groups (from 12 standard groups).
-                            3. Detection method.
-                            4. Location (City/State or Unknown)
-                            5. Amount involved (format $XXX,XXX or Unknown)
-                            Respond ONLY in JSON with keys:
-                            {{
-                                "fraud_type": "",
-                                "fraud_group_primary": "",
-                                "fraud_group_secondary": "",
-                                "detection_method": "",
-                                "location": "",
-                                "amount_involved": ""
-                            }}
-                            Summary:
-                            {summary_text}
-                            """
-                            response = client.chat.completions.create(
-                                model=OPENAI_CHAT_MODEL,
-                                messages=[{"role": "user", "content": prompt}],
-                                temperature=0.3
-                            )
-                            try:
-                                return json.loads(response.choices[0].message.content.strip())
-                            except:
-                                return None
-
-                        fraud_labels = get_fraud_type(summary)
-                        st.write("Fraud labels:")
-                        st.json(fraud_labels)
-
-                        # -----------------------------
-                        # Step 6: Clustering & Keywords
-                        # -----------------------------
-                        cluster = 0
-                        cluster_keywords = []
-                        st.write("Cluster assigned: 0")
-                        st.write("Keywords: None (single article)")
-
-                        # -----------------------------
-                        # Step 7: Save Outputs
-                        # -----------------------------
-                        OUT_DIR = Path("outputs_w_ai")
-                        OUT_DIR.mkdir(exist_ok=True)
-
-                        df_article = pd.DataFrame([{
-                            "title": article_data["title"],
-                            "url": article_data["url"],
-                            "published": article_data["full_date"],
-                            "text": article_data["text"],
-                            "clean_text": clean_article,
-                            "embedding": embedding,
-                            "summary": summary,
-                            "llm_labels": fraud_labels,
-                            "cluster": cluster,
-                            "cluster_keywords": cluster_keywords
-                        }])
-                        csv_path = OUT_DIR / "single_article_processed.csv"
-                        df_article.to_csv(csv_path, index=False)
-                        st.success(f"Saved processed article CSV: {csv_path}")
-
-                        # -----------------------------
-                        # Step 8: Upsert to Supabase
-                        # -----------------------------
-                        records = df_article.to_dict(orient="records")
-                        TABLE_NAME = "final_article_label_dataset"
-                        upsert_resp = supabase.table(TABLE_NAME).upsert(records).execute()
-                        st.success("Upserted article to Supabase.")
-
-                        # -----------------------------
-                        # Step 9: Display DataFrame in Streamlit
-                        # -----------------------------
-                        from streamlit_extras.dataframe_explorer import dataframe_explorer
-                        st.write("### Processed Article Table")
-                        dataframe_explorer(df_article)
-
-                        # -----------------------------
-                        # Step 10: Download Button
-                        # -----------------------------
-                        st.download_button(
-                            label="Download Processed CSV",
-                            data=df_article.to_csv(index=False).encode("utf-8"),
-                            file_name="processed_article.csv",
-                            mime="text/csv"
-                        )
-
+                    page_results = scrape_page(search_url)
+                    if not page_results:
+                        break
+                    for link in page_results:
+                        if link not in article_links:
+                            article_links.append(link)
+                        if len(article_links) >= 10:
+                            break
                 except Exception as e:
-                    st.error(f"An error occurred: {e}")
+                    st.error(f"Error scraping FDIC search page {page}: {e}")
+                    break
+                page += 1
+
+            if not article_links:
+                st.warning("No articles found for the provided keywords.")
+                st.stop()
+
+            st.write(f"### Found {len(article_links)} articles")
+            for l in article_links:
+                st.write("•", l)
+
+        # -------------------------
+        # 4. Scrape + Cache Logic
+        # -------------------------
+            st.subheader("Extracting Article Details...")
+
+            results = []
+
+            for link in article_links:
+                st.write(f"Processing: {link}")
+
+            # -------------------------
+            # (A) Check cache table
+            # -------------------------
+                cache_resp = supabase.table("fdic_cache").select("*").eq("url", link).execute()
+
+                if cache_resp.data:
+                    # Cached → use existing values
+                    row = cache_resp.data[0]
+                    results.append({
+                        "url": link,
+                        "fraud_type": row["fraud_type"],
+                        "detection_type": row["detection_type"],
+                        "cached": True
+                    })
+                    st.write(" → Retrieved from cache")
+                    continue
+
+            # -------------------------
+            # (B) Not cached → scrape + classify
+            # -------------------------
+                try:
+                    if link.endswith(".pdf"):
+                        text = extract_pdf_text(link)
+                    else:
+                        text = extract_html_text(link)
+                except Exception as e:
+                    results.append({
+                        "url": link,
+                        "fraud_type": "Error",
+                        "detection_type": "Error",
+                        "error": str(e),
+                        "cached": False
+                    })
+                    continue
+
+            # classify using your existing ML functions
+                try:
+                    fraud_type = classify_fraud_type(text)
+                    detection_type = classify_detection_type(text)
+                except:
+                    fraud_type = "Unknown"
+                    detection_type = "Unknown"
+
+            # Save computed values
+                results.append({
+                    "url": link,
+                    "fraud_type": fraud_type,
+                    "detection_type": detection_type,
+                    "cached": False
+                })
+
+            # -------------------------
+            # (C) Insert into Supabase cache
+            # -------------------------
+                supabase.table("fdic_cache").insert({
+                    "url": link,
+                    "fraud_type": fraud_type,
+                    "detection_type": detection_type,
+                    "scraped_at": datetime.datetime.utcnow().isoformat()
+                }).execute()
+
+                st.write(" → Processed & cached")
+
+        # -------------------------
+        # 5. Display results
+        # -------------------------
+            st.subheader("Results for Top 10 Articles")
+
+            for r in results:
+                st.markdown(f"### [{r['url']}]({r['url']})")
+                st.write("**Fraud Type:**", r["fraud_type"])
+                st.write("**Detection Method:**", r["detection_type"])
+                st.write("**Source:**", "Cache" if r["cached"] else "Fresh")
+                st.write("---")
+
+        # -------------------------
+        # 6. Download results as CSV
+        # -------------------------
+            import pandas as pd
+            df_results = pd.DataFrame(results)
+
+            csv_bytes = df_results.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                label="Download Results as CSV",
+                data=csv_bytes,
+                file_name="fdic_search_results.csv",
+                mime="text/csv"
+            )
+
 
 if __name__ == "__main__":
     main()

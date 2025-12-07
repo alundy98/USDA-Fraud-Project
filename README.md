@@ -1,10 +1,10 @@
 # 🏦 USAA Fraud Research Project - Group 5 
 ### Alec Lundy • Jason Labrecque • Jonathan Corll • Maria Eduarda Cramer F De R Silva
 ### Source: Federal Deposit Insurance Corporation - FDIC
-
+##### 🔗 Link to demo:
 ---
 
-## Project Description
+## 📘 Project Description
 
 In partnership with the USAA Federal Savings Bank, our team from the DTSC 3602 course at UNC Charlotte was asked to develop a Python-based tool capable of:
 * Scraping fraud-relates articles from the FDIC
@@ -73,7 +73,7 @@ uv run streamlit_run.py
 
 ---
 
-## Project Structure 
+## 📂 Project Structure 
 
 | File / Directory | Description |
 |------------------|-------------|
@@ -97,7 +97,7 @@ uv run streamlit_run.py
 
 ---
 
-## Methods Overview
+## 🧠 Methods Overview
 
 ##### **Data Collection**
 
@@ -132,8 +132,12 @@ The Streamlit dashboard `stramlit_run.py` allows used to interact with the FDIC 
 The dashboard serves as a quick inspection of the dataset and confirmation that the scraping, cleaning, and embedding steps are runnign correctly before merging with other teams' sources.  
 
 ---
+## 🧩 Architecture
+<img src="diagram.png" alt="Diagram" width="400">
 
-## Visualizations 
+---
+
+## 📊 Visualizations 
 
 #### **UMAP Visualization**
 
@@ -170,7 +174,7 @@ The UMAP visualization of loan fraud clusters:
 
 ---
 
-## Key Findings 
+## 🔍 Key Findings 
 
 ##### **Clear fraud-related groupings in FDIC narratives**
 Our embedding-based analysis showed that FDIC articles were consistently organized around major fraud themes such as cuber fraud, identity theft, consumer deception, and payment-related fraud.  This can be seen as a pattern across years and provides us with a strong foundation for trend monitoring within fraud. 
@@ -189,7 +193,7 @@ Across all fraud categories, the FDIC strongly emphasized consumer educaiton.  P
 
 ---
 
-## Future Work 
+## 🌱 Future Work 
 
 * Expand FDIC coverage and add more sources 
 * Enhance semantic trend monitoring 
@@ -199,6 +203,10 @@ Across all fraud categories, the FDIC strongly emphasized consumer educaiton.  P
 * Automate the pipeline for continuous monitoring 
 
 ---
+## 🔗 Resources
 
 You can access the FDIC Knowledge Center here: [FIDC Knowledge Center](https://ask.fdic.gov/fdicinformationandsupportcenter/s/article/Q-What-is-the-Grandparent-Scam?language=en_US)
+
+
+
 

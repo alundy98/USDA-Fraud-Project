@@ -1,3 +1,4 @@
+
 import os
 import re
 import time
@@ -555,49 +556,52 @@ def main():
     # visuals
     with tab1:
         st.header("Visualizations and Findings")
-
-        #carousel of visuals logic
-        visuals = [
-            {"title": "Fraud Type Counts", "image": "fraud_group_counts.png",
-            "desc": "Loan Fraud comprises the majority of FDIC fraud cases."},
-            {"title": "Loan Fraud Secondary Label", "image": "loan_fraud_secondary_counts.png",
-            "desc": "Money Laundering fraud traits and detection methods often show up in loan fraud cases."},
-            {"title": "Fraud Narrative Semantic Drift", "image": "visuals/semantic_drift_of_fraud_narratives_over_years.png",
-            "desc": "Shows a big shift in how fraud is carried out in 2018-2020, before declining lower than ever now."},
-            {"title": "UMAP Plot 2019", "image": "New Visuals/2019_umap_plot.png",
-            "desc": "An even scattering, no clear pattern"},
-            {"title": "UMAP Plot 2024", "image": "New Visuals/2024_umap_plot.png",
-            "desc": "A clear band surrounds cases, much tighter together, cyber fraud in a line through the middle"},
-            {"title": "Covid Related Fraud Cases", "image": "New Visuals/covid_case_count.png",
-            "desc": "Indicates a certain kind of fraud being especially prominent"},
-            {"title": "Loan Fraud Detection by Clusters", "image": "New Visuals/loan_fraud_detection_by_cluster.png",
-            "desc": "Shows the detection methods being used for each cluster of Loan Fraud"},
-            {"title": "Loan Fraud UMAP Clusters", "image": "New Visuals/loan_fraud_umap_clusters.png",
-            "desc": "Cluster 0: Internal banking misconduct, Asset Diversion Fraud, COVID related loan fraud. "
-                    "Cluster 1: Identity Fraud related Loan Fraud cases, lower money amounts. "
-                    "Cluster 2: Loan Fraud involving internal account manipulation. "
-                    "Cluster 3: Loan Fraud involving false COVID relief claims, no internal misconduct, PPP loans. "
-                    "Cluster 4: Employment Misrepresentation, Fake Business PPP loans"}
-        ]
-        if "carousel_index" not in st.session_state:
-            st.session_state.carousel_index = 0
-        idx = st.session_state.carousel_index
-        visual = visuals[idx]
-        st.subheader(visual["title"])
-        img_path = Path(visual["image"])
-        if img_path.exists():
-            st.image(img_path, use_container_width=True, width=600)
-        st.text_area("Description", visual["desc"], height=120, key=f"desc_{idx}")
-        nav_col1, nav_col2, nav_col3 = st.columns([1,4,1])
-        with nav_col1:
-            if st.button("← Previous"):
-                st.session_state.carousel_index = (idx - 1) % len(visuals)
-                st.rerun()
-        with nav_col3:
-            if st.button("Next →"):
-                st.session_state.carousel_index = (idx + 1) % len(visuals)
-                st.rerun()
+        # row 1 two side by side
+        col0, col7 = st.columns(2)
+        col1, col2 = st.columns(2)
+        with col0:
+            st.image("New Visuals/Figure_1.png", caption="FDIC Reports", use_container_width=True)
+            st.text_area("Prominent fraud types", "Identity Fraud and Cyber Fraud make up most of their reporting.", height=150, key="desc_vis0")
+        with col7:
+            st.image("New Visuals/Semantic_relation_drift_of_fraud_types2019-2025.png", caption="Semantic Relationship between Cyber and Identity fraud", use_container_width=True)
+            st.text_area("Traits of Cyber fraud present in Identity and other fraud types", "Over time the related fraud narratives gradually grow more similar.", height=150, key="desc_vis7")
         st.markdown("---")
+        with col1:
+            st.image("fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
+            st.text_area("Prominent fraud types", "Loan Fraud comprises the majority of FDIC fraud cases.", height=150, key="desc_vis1")
+        with col2:
+            st.image("loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
+            st.text_area("Prominent traits of other fraud types in Loan Fraud cases", "Money Laundering fraud traits and detection methods often show up in loan fraud cases.", height=150, key="desc_vis2")
+        st.markdown("---")
+        # big visualization
+        st.image("visuals/semantic_drift_of_fraud_narratives_over_years.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
+        st.text_area("How much fraud changes year to year", "Shows a big shift in how fraud is carried out in 2018-2020, before declining lower than ever now.", height=150, key="desc_big1")
+        st.markdown("---")
+        # row 2 two side by side
+        col3, col4 = st.columns(2)
+        with col3:
+            st.image("New Visuals/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.text_area("2019", "An even scattering, no clear pattern", height=150, key="desc_vis3")
+        with col4:
+            st.image("New Visuals/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.text_area("2025", "A clear band surrounds cases, much tighter together, cyber fraud in a line through the middle", height=150, key="desc_vis4")
+        st.markdown("---")
+        col5, col6 = st.columns(2)
+        with col5:
+            st.image("New Visuals/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
+            st.text_area("Over 50% of Loan Fraud Covid Related", "Indicates a certain kind of fraud being especially prominent", height=150, key="desc_vis5")
+        with col6:
+            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
+            st.text_area("Detection Method Proportions", "Shows the detection methods being used for each cluster of Loan Fraud", height=150, key="desc_vis6")
+        st.markdown("---")
+        # final big visualization
+        st.image("New Visuals/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
+        st.text_area("Description for Large Visualization 2", "Cluster 0: Internal banking misconduct, Asset Diversion Fraud, COVID related loan fraud. " \
+        "Cluster 1: Identity Fraud related Loan Fraud cases, lower money amounts. " \
+        "Cluster 2:Loan Fraud involving internal account manipulation. " \
+        "Cluster 3: Loan Fraud involving false COVID relief claims, no internal misconduct, PPP loans. " \
+        "Cluster 4: Employment Misrepresentation, Fake Business PPP loans", height=150, key="desc_big2")
+
 
         #US Map with Fraud Type Breakdown
         st.subheader("Fraud Cases Across the United States")
@@ -691,7 +695,7 @@ def main():
                             st.markdown("---")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
-# tab4 emerging fraud signals dashboard
+    # tab3 emerging fraud signals dashboard
     with tab3:
         st.header("Emerging Fraud Signals Dashboard")
         st.write("This dashboard identifies rising fraud themes, shows trend charts, and provides cluster-level fraud group & detection insights.")
@@ -705,7 +709,7 @@ def main():
                     if not article_rows or not emb_rows:
                         st.error("No articles or embeddings found in the dataset.")
                     else:
-                        # normalize embeddings (convert JSON strings to lists)
+                        # normalize embeddings
                         for r in emb_rows:
                             if isinstance(r.get("embedding"), str):
                                 try:
@@ -767,9 +771,9 @@ def main():
                             monthly_sorted = monthly.sort_index()
                             if not monthly_sorted.empty:
                                 st.line_chart(monthly_sorted)
-                            # prepare text for TF-IDF, augment with fraud group + detection method
+                            # prepare text for TF-IDF
                             df["aug_text"] = (df["clean_text"].fillna("") + " " + df["fraud_group_primary"].fillna("") + " " + df["detection_method"].fillna("")).str.strip()
-                            # Extract keywords per cluster using TF-IDF
+                            # extract keywords per cluster
                             cluster_candidates = {}
                             vectorizer = TfidfVectorizer(max_features=5000, stop_words="english", ngram_range=(1,2))
                             try:
@@ -781,31 +785,27 @@ def main():
                                         cluster_candidates[cl] = []
                                         continue
                                     submatrix = tfidf_all[idxs]
-                                    # mean tfidf per term within cluster
                                     mean_tfidf = np.asarray(submatrix.mean(axis=0)).ravel()
-                                    top_indices = mean_tfidf.argsort()[::-1][:60]  # candidate pool
+                                    top_indices = mean_tfidf.argsort()[::-1][:60]
                                     cluster_candidates[cl] = list(feature_names[top_indices])
                             except Exception:
-                                # fallback, word frequency
                                 for cl in range(k):
                                     texts = df[df["cluster"]==cl]["aug_text"].str.cat(sep=" ")
                                     tokens = re.findall(r"\w[\w\-']+", texts.lower())
                                     most = [w for w,c in Counter(tokens).most_common(30)]
                                     cluster_candidates[cl] = most
-                            # enforce exclusivity, remove keywords that appear as top candidates in multiple clusters
+                            # enforce exclusivity
                             candidate_counts = Counter()
                             for cl, kws in cluster_candidates.items():
-                                # consider only top 20 per cluster for overlap counting
                                 for w in kws[:20]:
                                     candidate_counts[w] += 1
                             unique_keywords = {}
                             for cl, kws in cluster_candidates.items():
                                 uniq = [w for w in kws if candidate_counts[w] == 1]
                                 if len(uniq) < 6:
-                                    # if too few unique words, allow words that appear at most twice
                                     uniq = [w for w in kws if candidate_counts[w] <= 2][:12]
                                 unique_keywords[cl] = uniq[:12]
-                            # generate cluster summaries, fraud group counts, detection method counts, avg amount, representative articles
+                            # generate cluster summaries
                             st.subheader("Cluster summaries")
                             cluster_summaries = []
                             for cl in range(k):
@@ -816,15 +816,13 @@ def main():
                                 top_fraud = [f for f,c in fraud_counts.most_common(3) if f and f.lower()!="unknown"]
                                 detect_counts = Counter(sub["detection_method"].fillna("").astype(str))
                                 top_detect = [d for d,c in detect_counts.most_common(3) if d and d.lower()!="unknown"]
-                                # avg amount numeric if present
+                                # avg amount numeric filtering outliers
                                 amounts = pd.to_numeric(sub["amount_numeric"], errors="coerce").dropna()
+                                amounts = amounts[(amounts>=1000) & (amounts<=100000000)]
                                 avg_amount = float(amounts.mean()) if not amounts.empty else None
-                                # representative articles, nearest to cluster center
                                 centroid = kmeans.cluster_centers_[cl]
-                                # get embeddings projected to same space (X_reduced)
                                 cluster_idxs = sub.index.tolist()
                                 cluster_points = X_reduced[cluster_idxs]
-                                # compute distances
                                 dists = np.linalg.norm(cluster_points - centroid, axis=1)
                                 rep_idxs = np.array(cluster_idxs)[dists.argsort()[:5]].tolist()
                                 reps = []
@@ -840,9 +838,9 @@ def main():
                                     "avg_amount": avg_amount,
                                     "representative_articles": reps
                                 })
-                            # show cluster summaries with detection & fraud group info
+                            # show cluster summaries with cluster numbers aligned to visuals
                             for cs in cluster_summaries:
-                                st.markdown(f"### Cluster {cs['cluster']+1} — {cs['count']} articles")
+                                st.markdown(f"### Cluster {cs['cluster']} — {cs['count']} articles")
                                 st.markdown(f"**Top unique keywords:** {', '.join(cs['keywords']) if cs['keywords'] else 'None'}")
                                 st.markdown(f"**Top fraud groups:** {', '.join(cs['top_fraud_groups']) if cs['top_fraud_groups'] else 'Unknown'}")
                                 st.markdown(f"**Top detection methods:** {', '.join(cs['top_detection_methods']) if cs['top_detection_methods'] else 'Unknown'}")
@@ -855,7 +853,7 @@ def main():
                                 for r in cs['representative_articles']:
                                     st.markdown(f"- [{r['title']}]({r['url']}) — {r.get('date','')}")
                                 st.markdown("---")
-                            # compute emerging score per cluster (z-score growth + trend slope + keyword novelty)
+                            # compute emerging score per cluster
                             st.subheader("Emerging cluster signals")
                             recent_window = 6
                             monthly = df[df["ym"] != "unknown"].groupby(["ym","cluster"]).size().unstack(fill_value=0)
@@ -864,7 +862,6 @@ def main():
                             novelty_scores = {}
                             slope_scores = {}
                             if monthly_sorted.shape[0] >= 2:
-                                # compute z-score growth (recent mean vs historical mean)
                                 for col in monthly_sorted.columns:
                                     series = monthly_sorted[col].astype(float)
                                     if len(series) < recent_window + 1:
@@ -878,14 +875,12 @@ def main():
                                     past_std = past.std() if len(past)>0 else 0.0
                                     z = (recent.mean() - past_mean) / past_std if past_std>0 else 0.0
                                     growth_scores[col] = float(z)
-                                    # slope (linear fit on recent window)
                                     try:
                                         idx = np.arange(len(recent))
                                         slope = np.polyfit(idx, recent.values, 1)[0]
                                     except Exception:
                                         slope = 0.0
                                     slope_scores[col] = float(slope)
-                                    # just cool, for cluster keywords, compare freq in recent_window vs previous 12 months
                                     try:
                                         recent_months = monthly_sorted.index[-recent_window:]
                                         recent_sum = monthly_sorted.loc[recent_months, col].sum()
@@ -899,7 +894,6 @@ def main():
                                     growth_scores[col] = 0.0
                                     slope_scores[col] = 0.0
                                     novelty_scores[col] = 1.0
-                            # normalize components and combine
                             def normalize_dict(d):
                                 vals = np.array(list(d.values()), dtype=float)
                                 if vals.max() - vals.min() == 0:
@@ -914,15 +908,13 @@ def main():
                                 emerg_scores[col] = 0.5 * g_norm.get(col,0.0) + 0.3 * s_norm.get(col,0.0) + 0.2 * n_norm.get(col,0.0)
                             gs_series = pd.Series(emerg_scores).sort_values(ascending=False)
                             st.write(gs_series)
-                            # top emerging cluster details
                             if not gs_series.empty:
                                 top_cluster = int(gs_series.index[0])
-                                st.subheader(f"Representative articles for emerging cluster {top_cluster+1}")
+                                st.subheader(f"Representative articles for emerging cluster {top_cluster}")
                                 reps = df[df["cluster"]==top_cluster].sort_values(by="date", ascending=False).head(5)
                                 for _, r in reps.iterrows():
                                     st.markdown(f"**[{r['title']}]({r['url']})**")
                                     st.markdown(f"*Date:* {r['date']}  •  *Location:* {r['location'] or 'Unknown'}")
-                                    # clean summary similarly to Tab2 lightly
                                     summ = r.get("summary") or r.get("clean_text","")
                                     summ = re.sub(r"[^\x00-\x7F]+"," ", summ)
                                     summ = re.sub(r"\s+"," ", summ).strip()
@@ -930,6 +922,7 @@ def main():
                                     st.markdown("---")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
+
 
     # Run Scraper
     with tab4:

@@ -10,6 +10,7 @@ dependencies = [
     "dataparser>=0.0.2",
     "dateparser>=1.2.2",
     "dotenv>=0.9.9",
+    "geopy>=2.4.1",
     "hdbscan>=0.8.40",
     "imblearn>=0.0",
     "matplotlib>=3.10.7",
@@ -30,5 +31,6 @@ dependencies = [
     "streamlit-extras>=0.7.8",
     "supabase>=2.22.3",
     "tqdm>=4.67.1",
+    "us>=3.2.0",
     "xgboost>=3.1.1",
 ]

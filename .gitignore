@@ -25,6 +25,7 @@ test.py
 fnMap.py
 loan_fraud_cluster_summary.csv
 training_changes.py
+streamlit_run_ver_2.py
 visuals/
 __pycache__/
 #git rm --cached fdic_not_fraud_scraper.py

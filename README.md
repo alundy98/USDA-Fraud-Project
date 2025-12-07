@@ -133,7 +133,7 @@ The dashboard serves as a quick inspection of the dataset and confirmation that 
 
 ---
 ## 🧩 Architecture
-<img src="diagram.png" alt="Diagram" width="400">
+<img src="diagram.png" alt="Diagram" width="500">
 
 ---
 
@@ -143,33 +143,33 @@ The dashboard serves as a quick inspection of the dataset and confirmation that 
 
 The 2019 UMAP plot:
 
-<img src="New%20Visuals/2019_umap_plot.png" alt="2019 UMAP Plot" width="400">
+<img src="New%20Visuals/2019_umap_plot.png" alt="2019 UMAP Plot" width="500">
 
 The 2024 UMAP plot:
 
-<img src="New%20Visuals/2024_umap_plot.png" alt="2024 UMAP Plot" width="400">
+<img src="New%20Visuals/2024_umap_plot.png" alt="2024 UMAP Plot" width="500">
 
 The 2025 UMAP plot: 
 
-<img src="New%20Visuals/2025_umap_plot.png" alt="2025 UMAP Plot" width="400">
+<img src="New%20Visuals/2025_umap_plot.png" alt="2025 UMAP Plot" width="500">
 
 #### **COVID Case Count Visualization**
 
 The COVID-related case count visualization:
 
-<img src="New%20Visuals/covid_case_count.png" alt="COVID Case Count Plot" width="400">
+<img src="New%20Visuals/covid_case_count.png" alt="COVID Case Count Plot" width="500">
 
 #### **Loan Fraud Detection by Cluster**
 
 The visualization of loan fraud detection by cluster:
 
-<img src="New%20Visuals/loan_fraud_detection_by_cluster.png" alt="Loan Fraud Detection by Cluster" width="400">
+<img src="New%20Visuals/loan_fraud_detection_by_cluster.png" alt="Loan Fraud Detection by Cluster" width="500">
 
 #### **Loan Fraud UMAP Clusters**
 
 The UMAP visualization of loan fraud clusters:
 
-<img src="New%20Visuals/loan_fraud_umap_clusters.png" alt="Loan Fraud UMAP Clusters" width="400">
+<img src="New%20Visuals/loan_fraud_umap_clusters.png" alt="Loan Fraud UMAP Clusters" width="500">
 
 
 ---

@@ -566,42 +566,42 @@ def main():
         col0, col7 = st.columns(2)
         col1, col2 = st.columns(2)
         with col0:
-            st.image("New Visuals/Figure_1.png", caption="FDIC Reports", use_container_width=True)
+            st.image("/root/assets/Figure_1.png", caption="FDIC Reports", use_container_width=True)
             st.text_area("Prominent fraud types", "Identity Fraud and Cyber Fraud make up most of their reporting.", height=150, key="desc_vis0")
         with col7:
-            st.image("New Visuals/Semantic_relation_drift_of_fraud_types2019-2025.png", caption="Semantic Relationship between Cyber and Identity fraud", use_container_width=True)
+            st.image("/root/assets/Semantic_relation_drift_of_fraud_types2019-2025.png", caption="Semantic Relationship between Cyber and Identity fraud", use_container_width=True)
             st.text_area("Traits of Cyber fraud present in Identity and other fraud types", "Over time the related fraud narratives gradually grow more similar.", height=150, key="desc_vis7")
         st.markdown("---")
         with col1:
-            st.image("fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
+            st.image("/root/assets/fraud_group_counts.png", caption="Fraud Type Counts", use_container_width=True)
             st.text_area("Prominent fraud types", "Loan Fraud comprises the majority of FDIC fraud cases.", height=150, key="desc_vis1")
         with col2:
-            st.image("loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
+            st.image("/root/assets/loan_fraud_secondary_counts.png", caption="Loan Fraud Secondary Label", use_container_width=True)
             st.text_area("Prominent traits of other fraud types in Loan Fraud cases", "Money Laundering fraud traits and detection methods often show up in loan fraud cases.", height=150, key="desc_vis2")
         st.markdown("---")
         # big visualization
-        st.image("visuals/semantic_drift_of_fraud_narratives_over_years.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
+        st.image("/root/assets/semantic_drift_yr_to_yr.png", caption="Fraud Narrative Semantic Drift", use_container_width=True)
         st.text_area("How much fraud changes year to year", "Shows a big shift in how fraud is carried out in 2018-2020, before declining lower than ever now.", height=150, key="desc_big1")
         st.markdown("---")
         # row 2 two side by side
         col3, col4 = st.columns(2)
         with col3:
-            st.image("New Visuals/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.image("/root/assets/2019_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
             st.text_area("2019", "An even scattering, no clear pattern", height=150, key="desc_vis3")
         with col4:
-            st.image("New Visuals/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
+            st.image("/root/assets/2024_umap_plot.png", caption="UMAP Plot of Fraud Narrative Semantic Cosine Similarity", use_container_width=True)
             st.text_area("2025", "A clear band surrounds cases, much tighter together, cyber fraud in a line through the middle", height=150, key="desc_vis4")
         st.markdown("---")
         col5, col6 = st.columns(2)
         with col5:
-            st.image("New Visuals/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
+            st.image("/root/assets/covid_case_count.png", caption="Number of Covid Related Fraud Cases", use_container_width=True)
             st.text_area("Over 50% of Loan Fraud Covid Related", "Indicates a certain kind of fraud being especially prominent", height=150, key="desc_vis5")
         with col6:
-            st.image("New Visuals/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
+            st.image("/root/assets/loan_fraud_detection_by_cluster.png", caption="Loan Fraud Detection by Clusters ", use_container_width=True)
             st.text_area("Detection Method Proportions", "Shows the detection methods being used for each cluster of Loan Fraud", height=150, key="desc_vis6")
         st.markdown("---")
         # final big visualization
-        st.image("New Visuals/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
+        st.image("/root/assets/loan_fraud_umap_clusters.png", caption="Large Visualization 2", use_container_width=True)
         st.text_area("Description for Large Visualization 2", "Cluster 0: Internal banking misconduct, Asset Diversion Fraud, COVID related loan fraud. " \
         "Cluster 1: Identity Fraud related Loan Fraud cases, lower money amounts. " \
         "Cluster 2:Loan Fraud involving internal account manipulation. " \

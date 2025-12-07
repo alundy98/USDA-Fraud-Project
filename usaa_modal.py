@@ -25,9 +25,9 @@ image = (
     .env({"FORCE_REBUILD": "true"})  # 🚨 Add this line to force a rebuild
     .add_local_file(streamlit_script_local_path, streamlit_script_remote_path)
     # Add all PNG files used in Streamlit code:
-    .add_local_file("Figure1.png", "/root/assets/Figure1.png")
-    .add_local_file("fraud_group_counts.png", "/root/assets/Figure1.png")
-    .add_local_file("Semantic_relation_drift_of_fraud_types2019-2025.png", "/root/assets/Semantic_relation_drift_of_fraud_types2019-2025.png")
+    .add_local_file("New Visuals/Figure_1.png", "/root/assets/Figure1.png")
+    .add_local_file("fraud_group_counts.png", "/root/assets/fraud_group_counts.png")
+    .add_local_file("New Visuals/Semantic_relation_drift_of_fraud_types2019-2025.png", "/root/assets/Semantic_relation_drift_of_fraud_types2019-2025.png")
     .add_local_file("loan_fraud_secondary_counts.png", "/root/assets/loan_fraud_secondary_counts.png")
     .add_local_file("New Visuals/Semantic_relation_drift_of_fraud_types2019-2025.png", "/root/assets/Semantic_relation_drift_of_fraud_types2019-2025.png")
     .add_local_file("New Visuals/2019_umap_plot.png", "/root/assets/2019_umap_plot.png")

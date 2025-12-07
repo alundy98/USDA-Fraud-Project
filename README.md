@@ -81,6 +81,7 @@ uv run streamlit_run.py
 | `outputs/` | Cleaned articles, embeddings, and clustering results |
 | `outputs_not_fraud/` | Non-fraud reference articles used for comparison |
 | `outputs_new_prompt/` | Experimental embedding outputs using alternative prompts |
+| `New Visuals/` | Visualizations from `visuals.py` |
 | `FDIC_scraper.py` | Scraper for FDIC press releases and consumer alerts |
 | `fdicOIG_scraper.py` | Scraper for FDIC OIG PDF reports |
 | `embedding.py` | Main text cleaning and embedding pipeline |
@@ -91,6 +92,7 @@ uv run streamlit_run.py
 | `streamlit_run.py` | Streamlit dashboard to explore articles and clusters |
 | `example.env` | Template for required environment variables |
 | `pyproject.toml` | Project configuration + dependencies (uv-managed) |
+| `visuals.py` | Visualizations created post pipeline execution |
 | `uv.lock` | Locked dependency versions for reproducibility |
 
 ---
@@ -174,7 +176,7 @@ The UMAP visualization of loan fraud clusters:
 Our embedding-based analysis showed that FDIC articles were consistently organized around major fraud themes such as cuber fraud, identity theft, consumer deception, and payment-related fraud.  This can be seen as a pattern across years and provides us with a strong foundation for trend monitoring within fraud. 
 
 ##### **Significant semantic shift between 2019 and 2020**
-A substantial change in fraud narratives took place within 2019 and 2020, largely coinciding with the rise in digital activity during the COVID-19 pandemic.  This shift marks when cuber fraud began rapidly acceleating and ovrelapping with identity fraud. 
+A substantial change in fraud narratives took place within 2019 and 2020, largely coinciding with the rise in digital activity during the COVID-19 pandemic.  This shift marks when cuber fraud began rapidly acceleating and ovrelapping with identity fraud. A significant portion of the embedded articles were related to COVID-19 relief loan fraud.  
 
 ##### **Increasing overlap between cyber fraud and identity fraud**
 Since 2020, cyber fraus and identity fraud have become semantically more similar.  This could potentially suggest that the two fraud types are converging in methods, tactics, or reporting patterns.  This may require joint monitoring in future models. 

@@ -660,13 +660,19 @@ def main():
     with tab3:
         st.header("Emerging Fraud Signals Dashboard")
         st.write("This dashboard identifies rising fraud themes, shows trend charts, and provides cluster-level fraud group & detection insights.")
+
+        @st.cache_data(show_spinner=False)
+        def load_data():
+            article_rows = supabase.table("final_article_label_dataset").select(
+                "title,url,full_date,published,clean_text,summary,fraud_group_primary,fraud_group_secondary,detection_method,location,amount_involved,amount_numeric"
+            ).limit(5000).execute().data
+            emb_rows = supabase.table("final_embeddings_dataset").select("url,embedding").limit(5000).execute().data
+            return article_rows, emb_rows
+
         if st.button("Analyze Emerging Signals"):
             with st.spinner("Analyzing"):
                 try:
-                    article_rows = supabase.table("final_article_label_dataset").select(
-                        "title,url,full_date,published,clean_text,summary,fraud_group_primary,fraud_group_secondary,detection_method,location,amount_involved,amount_numeric"
-                    ).limit(5000).execute().data
-                    emb_rows = supabase.table("final_embeddings_dataset").select("url,embedding").limit(5000).execute().data
+                    article_rows, emb_rows = load_data()
                     if not article_rows or not emb_rows:
                         st.error("No articles or embeddings found in the dataset.")
                     else:
@@ -715,10 +721,18 @@ def main():
                             kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
                             labels = kmeans.fit_predict(X_reduced)
                             df["cluster"] = labels
+
                             # cluster counter
                             st.subheader("Cluster counts")
                             cluster_counts = df["cluster"].value_counts().sort_index()
                             st.bar_chart(cluster_counts)
+
+                            # **fraud group proportions per cluster**
+                            st.subheader("Fraud group proportions by cluster")
+                            cluster_fraud = df.groupby(["cluster", "fraud_group_primary"]).size().unstack(fill_value=0)
+                            cluster_fraud_prop = cluster_fraud.div(cluster_fraud.sum(axis=1), axis=0)
+                            st.bar_chart(cluster_fraud_prop)
+
                             # monthly trends table
                             st.subheader("Fraud theme trends over time (by cluster)")
                             parsed_months = []
@@ -732,8 +746,10 @@ def main():
                             monthly_sorted = monthly.sort_index()
                             if not monthly_sorted.empty:
                                 st.line_chart(monthly_sorted)
+
                             # prepare text for TF-IDF
                             df["aug_text"] = (df["clean_text"].fillna("") + " " + df["fraud_group_primary"].fillna("") + " " + df["detection_method"].fillna("")).str.strip()
+
                             # extract keywords per cluster
                             cluster_candidates = {}
                             vectorizer = TfidfVectorizer(max_features=5000, stop_words="english", ngram_range=(1,2))
@@ -755,6 +771,7 @@ def main():
                                     tokens = re.findall(r"\w[\w\-']+", texts.lower())
                                     most = [w for w,c in Counter(tokens).most_common(30)]
                                     cluster_candidates[cl] = most
+
                             # enforce exclusivity
                             candidate_counts = Counter()
                             for cl, kws in cluster_candidates.items():
@@ -766,6 +783,7 @@ def main():
                                 if len(uniq) < 6:
                                     uniq = [w for w in kws if candidate_counts[w] <= 2][:12]
                                 unique_keywords[cl] = uniq[:12]
+
                             # generate cluster summaries
                             st.subheader("Cluster summaries")
                             cluster_summaries = []
@@ -777,7 +795,6 @@ def main():
                                 top_fraud = [f for f,c in fraud_counts.most_common(3) if f and f.lower()!="unknown"]
                                 detect_counts = Counter(sub["detection_method"].fillna("").astype(str))
                                 top_detect = [d for d,c in detect_counts.most_common(3) if d and d.lower()!="unknown"]
-                                # avg amount numeric filtering outliers
                                 amounts = pd.to_numeric(sub["amount_numeric"], errors="coerce").dropna()
                                 amounts = amounts[(amounts>=1000) & (amounts<=100000000)]
                                 avg_amount = float(amounts.mean()) if not amounts.empty else None
@@ -799,7 +816,8 @@ def main():
                                     "avg_amount": avg_amount,
                                     "representative_articles": reps
                                 })
-                            # show cluster summaries with cluster numbers aligned to visuals
+
+                            # show cluster summaries
                             for cs in cluster_summaries:
                                 st.markdown(f"### Cluster {cs['cluster']} — {cs['count']} articles")
                                 st.markdown(f"**Top unique keywords:** {', '.join(cs['keywords']) if cs['keywords'] else 'None'}")
@@ -814,6 +832,7 @@ def main():
                                 for r in cs['representative_articles']:
                                     st.markdown(f"- [{r['title']}]({r['url']}) — {r.get('date','')}")
                                 st.markdown("---")
+
                             # compute emerging score per cluster
                             st.subheader("Emerging cluster signals")
                             recent_window = 6
@@ -855,12 +874,14 @@ def main():
                                     growth_scores[col] = 0.0
                                     slope_scores[col] = 0.0
                                     novelty_scores[col] = 1.0
+
                             def normalize_dict(d):
                                 vals = np.array(list(d.values()), dtype=float)
                                 if vals.max() - vals.min() == 0:
                                     return {k: 0.0 for k in d.keys()}
                                 mn, mx = vals.min(), vals.max()
                                 return {k: float((v-mn)/(mx-mn)) for k,v in d.items()}
+
                             g_norm = normalize_dict(growth_scores)
                             s_norm = normalize_dict(slope_scores)
                             n_norm = normalize_dict(novelty_scores)
@@ -869,6 +890,7 @@ def main():
                                 emerg_scores[col] = 0.5 * g_norm.get(col,0.0) + 0.3 * s_norm.get(col,0.0) + 0.2 * n_norm.get(col,0.0)
                             gs_series = pd.Series(emerg_scores).sort_values(ascending=False)
                             st.write(gs_series)
+
                             if not gs_series.empty:
                                 top_cluster = int(gs_series.index[0])
                                 st.subheader(f"Representative articles for emerging cluster {top_cluster}")
@@ -883,6 +905,7 @@ def main():
                                     st.markdown("---")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
+
 
 
     # Run Scraper

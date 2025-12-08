@@ -7,9 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "bertopic>=0.17.3",
     "bs4>=0.0.2",
+    "cartopy>=0.25.0",
     "dataparser>=0.0.2",
     "dateparser>=1.2.2",
     "dotenv>=0.9.9",
+    "geopandas>=1.1.1",
     "geopy>=2.4.1",
     "hdbscan>=0.8.40",
     "imblearn>=0.0",

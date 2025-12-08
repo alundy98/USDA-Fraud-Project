@@ -603,45 +603,6 @@ def main():
         "Cluster 4: Employment Misrepresentation, Fake Business PPP loans", height=150, key="desc_big2")
 
 
-        #US Map with Fraud Type Breakdown
-        st.subheader("Fraud Cases Across the United States")
-        try:
-            df = supabase.table("final_article_label_dataset").select("location,fraud_group_primary").limit(5000).execute().data
-            if not df:
-                st.warning("No data found for US map visualization.")
-            else:
-                df_map = pd.DataFrame(df)
-                df_map = df_map[df_map["location"].notna() & df_map["fraud_group_primary"].notna()]
-                # takes state from location
-                df_map["state"] = df_map["location"].apply(lambda x: x.split(",")[-1].strip() if "," in x else None)
-                # Total cases per state
-                state_counts = df_map.groupby("state").size().reset_index(name="cases")
-                # Top 3 fraud types per state for hover
-                fraud_summary = df_map.groupby(["state","fraud_group_primary"]).size().reset_index(name="count")
-                hover_texts = {}
-                for state in state_counts["state"].unique():
-                    top_types = fraud_summary[fraud_summary["state"]==state].sort_values("count", ascending=False).head(3)
-                    hover_texts[state] = "<br>".join([f"{row['fraud_group_primary']}: {row['count']}" for _, row in top_types.iterrows()])
-
-                state_counts["hover_text"] = state_counts["state"].map(hover_texts)
-
-                # Plotly choropleth map
-                fig = px.choropleth(state_counts,
-                                    locations="state",
-                                    locationmode="USA-states",
-                                    color="cases",
-                                    hover_name="state",
-                                    hover_data={"cases":True, "hover_text":True},
-                                    color_continuous_scale="Viridis",
-                                    scope="usa",
-                                    labels={"cases":"Fraud Cases"})
-                fig.update_traces(hovertemplate="%{hover_name}<br>Cases: %{cases}<br>%{customdata[1]}")
-                fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=600)
-                st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error generating US map: {e}")
-
-
     #semantic search tab
     with tab2:
         st.header("Semantic Search: Fraud Knowledge")

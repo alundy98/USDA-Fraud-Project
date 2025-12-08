@@ -1,7 +1,8 @@
 # 🏦 USAA Fraud Research Project - Group 5 
 ### Alec Lundy • Jason Labrecque • Jonathan Corll • Maria Eduarda Cramer F De R Silva
 ### Source: Federal Deposit Insurance Corporation - FDIC
-##### 🔗 Link to demo:
+##### 🔗 Link to demo: 
+https://jason-17--usaa-fraud-dashboard-run.modal.run
 ---
 
 ## 📘 Project Description
